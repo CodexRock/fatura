@@ -383,14 +383,20 @@ export async function addPayment(businessId: string, invoiceId: string, paymentD
   const invoiceRef = doc(db, `businesses/${businessId}/invoices`, invoiceId).withConverter(converters.invoice);
   
   await runTransaction(db, async (transaction) => {
+    // 1. All Reads First
     const invoiceSnap = await transaction.get(invoiceRef);
     if (!invoiceSnap.exists()) throw new FaturaFirestoreError('Invoice not found', 'not_found');
     
     const invoice = invoiceSnap.data();
+    if (!invoice.clientId) throw new FaturaFirestoreError('Invoice has no client associated', 'invalid_data');
+
+    const clientRef = doc(db, `businesses/${businessId}/clients`, invoice.clientId).withConverter(converters.client);
+    const clientSnap = await transaction.get(clientRef);
     
+    // 2. Logic & Calculations
     const newPayment: Payment = {
       ...paymentData,
-      id: crypto.randomUUID(), // Assuming modern browser context or Node environment with crypto
+      id: crypto.randomUUID(),
     };
 
     const newPayments = [...(invoice.payments || []), newPayment];
@@ -413,11 +419,9 @@ export async function addPayment(businessId: string, invoiceId: string, paymentD
       updates.paidAt = serverTimestamp();
     }
 
+    // 3. All Writes Last
     transaction.update(invoiceRef, updates);
 
-    // Update denormalized client balances
-    const clientRef = doc(db, `businesses/${businessId}/clients`, invoice.clientId).withConverter(converters.client);
-    const clientSnap = await transaction.get(clientRef);
     if (clientSnap.exists()) {
       const clientObj = clientSnap.data();
       transaction.update(clientRef, {
