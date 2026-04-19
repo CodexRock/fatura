@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Kufi+Arabic:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  }
+
+  /* Support for RTL and Arabic typography */
+  html[dir="rtl"] body {
+    @apply font-arabic;
+  }
+}
+
+@layer components {
+  /* Common layout containers */
+  .container-fluid {
+    @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  /* Input elements base styles */
+  .input-field {
+    @apply flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-secondary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}
+
+@layer utilities {
+  .flex-center {
+    @apply flex items-center justify-center;
+  }
+  .flex-between {
+    @apply flex items-center justify-between;
+  }
+
+  /* Toggle RTL layout gracefully */
+  .rtl-reverse {
+    @apply rtl:flex-row-reverse;
+  }
+  .rtl-space {
+    @apply rtl:space-x-reverse;
+  }
+}
