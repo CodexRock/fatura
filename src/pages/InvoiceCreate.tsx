@@ -249,9 +249,8 @@ export default function InvoiceCreate() {
     const dueDateTs = Timestamp.fromDate(new Date(state.dueDate));
 
     const finalLines: InvoiceLine[] = linesWithTotals.map(l => {
-      const lineObj: InvoiceLine = {
+      const lineObj: any = {
         id: l.id,
-        productId: l.productId,
         description: l.description,
         quantity: parseFloat(l.quantityStr) || 0,
         unitPrice: madToCentimes(parseFloat(l.unitPriceStr) || 0),
@@ -260,6 +259,10 @@ export default function InvoiceCreate() {
         totalTVA: l.calculated.totalTVA,
         totalTTC: l.calculated.totalTTC,
       };
+
+      if (l.productId) {
+        lineObj.productId = l.productId;
+      }
 
       if (l.showDiscount && parseFloat(l.discountValueStr) > 0) {
         lineObj.discount = { 
