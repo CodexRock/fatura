@@ -302,7 +302,7 @@ function TabEntreprise({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-[75px] lg:pb-6">
       {/* Logo & Brand */}
       <div className={sectionCardClass}>
         <SectionHeader icon={Palette} title="Logo & Marque" description="Personnalisez l'apparence de vos factures" />
@@ -467,7 +467,7 @@ function TabEntreprise({
         </div>
       </div>
 
-      <div className="flex justify-end pt-2">
+      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-[260px] right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
         <SaveButton loading={loading || uploading} onClick={handleSave} />
       </div>
     </div>
@@ -504,7 +504,7 @@ function TabFacturation({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-[75px] lg:pb-6">
       {/* Invoice Numbering */}
       <div className={sectionCardClass}>
         <SectionHeader icon={FileText} title="Numérotation des Factures" description="Format séquentiel conforme DGI" />
@@ -584,7 +584,7 @@ function TabFacturation({
         </div>
       </div>
 
-      <div className="flex justify-end pt-2">
+      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-[260px] right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
         <SaveButton loading={loading} onClick={handleSave} />
       </div>
     </div>
@@ -618,7 +618,7 @@ function TabBanque({
   const hasBankInfo = bankName || rib || iban;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-[75px] lg:pb-6">
       <div className={sectionCardClass}>
         <SectionHeader icon={Landmark} title="Coordonnées Bancaires" description="Apparaît en pied de page de vos factures" />
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -689,7 +689,7 @@ function TabBanque({
         </div>
       </div>
 
-      <div className="flex justify-end pt-2">
+      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-[260px] right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
         <SaveButton loading={loading} onClick={handleSave} />
       </div>
     </div>

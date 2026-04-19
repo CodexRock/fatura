@@ -117,7 +117,7 @@ export default function ProductForm({ isOpen, onClose, product, existingCategori
       
       {/* Slide-over Container Base */}
       <div 
-        className={`absolute inset-y-0 right-0 w-full md:max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`absolute inset-y-0 right-0 w-full md:max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform pb-[68px] lg:pb-0 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
           <h2 className="text-xl font-bold text-[#1B4965] flex items-center gap-2">
@@ -271,7 +271,7 @@ export default function ProductForm({ isOpen, onClose, product, existingCategori
         </div>
 
         {/* Footer Persistence Controls */}
-        <div className="p-4 bg-white border-t border-slate-100 shadow-[0_-4px_10px_rgb(0,0,0,0.02)]">
+        <div className="mt-auto p-4 bg-white/95 backdrop-blur-md border-t border-slate-200/60 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
           <button 
             type="submit"
             form="product-form"

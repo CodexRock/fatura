@@ -35,6 +35,7 @@ interface State {
   dueDate: string;   // YYYY-MM-DD
   clientId: string | null;
   selectedClient: Client | null;
+  isSearchingClient: boolean;
   lines: LineState[];
   notes: string;
   internalNotes: string;
@@ -143,6 +144,7 @@ export default function InvoiceCreate() {
     dueDate: getFutureDateStr(business?.defaultPaymentTermsDays || 30),
     clientId: null,
     selectedClient: null,
+    isSearchingClient: false,
     lines: [createEmptyLine()],
     notes: '',
     internalNotes: '',
@@ -318,7 +320,7 @@ export default function InvoiceCreate() {
           </div>
 
           {/* Section 1: Metadata */}
-          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+          <section className="bg-white px-4 py-6 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 pb-6">
               <div className="flex p-1 bg-slate-100 rounded-lg">
                 {(['facture', 'devis', 'proforma', 'avoir'] as InvoiceType[]).map((type) => (
@@ -363,12 +365,21 @@ export default function InvoiceCreate() {
           </section>
 
           {/* Section 2: Client */}
-          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <section className="bg-white px-4 py-6 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-lg font-semibold text-slate-800">Client</h2>
             
             {!state.selectedClient ? (
-              <div className="relative">
-                <div className="relative">
+              <div 
+                className="relative" 
+                onFocus={() => dispatch({ type: 'SET_FIELD', field: 'isSearchingClient', value: true })}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    dispatch({ type: 'SET_FIELD', field: 'isSearchingClient', value: false });
+                  }
+                }}
+                tabIndex={-1}
+              >
+                <div className="relative" onClick={() => dispatch({ type: 'SET_FIELD', field: 'isSearchingClient', value: true })}>
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                   <input
                     type="text"
@@ -378,9 +389,12 @@ export default function InvoiceCreate() {
                     className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary"
                   />
                 </div>
-                {clientSearch && (
+                {state.isSearchingClient && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                    {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).map(client => (
+                    {clients
+                        .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                        .slice(0, 5)
+                        .map(client => (
                       <button
                         key={client.id}
                         onClick={() => {
@@ -429,7 +443,7 @@ export default function InvoiceCreate() {
           </section>
 
           {/* Section 3: Line Items */}
-          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <section className="bg-white px-4 py-6 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-lg font-semibold text-slate-800">Lignes de facturation</h2>
             
             <div className="space-y-4">
@@ -713,7 +727,7 @@ export default function InvoiceCreate() {
       </div>
 
       {/* ---------------- BOTTOM ACTION BAR ---------------- */}
-      <div className="fixed bottom-[72px] lg:bottom-0 left-0 lg:left-64 right-0 lg:right-[380px] xl:right-[450px] bg-white border-t border-slate-200 p-4 px-6 flex items-center justify-between z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-64 right-0 lg:right-[380px] xl:right-[450px] bg-white/80 backdrop-blur-xl border-t border-slate-200/60 p-4 px-6 flex items-center justify-between z-40 shadow-[0_-15px_35px_rgba(0,0,0,0.1)] rounded-t-2xl lg:rounded-none">
         <div className="md:hidden">
           <div className="text-xs text-slate-500 font-medium">Total TTC</div>
           <div className="text-lg font-bold text-primary tabular-nums tracking-tight">

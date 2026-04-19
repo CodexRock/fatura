@@ -232,6 +232,19 @@ export default function Products() {
         </div>
       )}
 
+      {/* ---------------- MOBILE ACTION BAR ---------------- */}
+      <div className="lg:hidden fixed bottom-[65px] left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200/60 p-4 px-6 flex items-center justify-center z-40 shadow-[0_-15px_35px_rgba(0,0,0,0.1)] rounded-t-2xl">
+        <button
+          onClick={() => {
+            setEditingProduct(null);
+            setIsFormOpen(true);
+          }}
+          className="w-full flex items-center justify-center gap-2 bg-[#1B4965] hover:bg-[#153a51] text-white py-3.5 rounded-xl font-bold transition-all shadow-[0_4px_14px_0_rgb(27,73,101,0.25)] active:scale-[0.98]"
+        >
+          <Plus className="h-5 w-5" />
+          Nouveau Produit
+        </button>
+      </div>
     </div>
   );
 }
