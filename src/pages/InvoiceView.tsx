@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Download, CreditCard, Share2, Copy, 
+  ArrowLeft, Download, CreditCard, Share2, Copy, Send,
   Trash2, XCircle, CheckCircle, Clock, FileText, AlertCircle 
 } from 'lucide-react';
 import { getInvoice, getClient, addPayment, updateInvoiceStatus, cancelInvoice, markInvoiceAsSent } from '../lib/firestore';
