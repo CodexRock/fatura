@@ -87,6 +87,14 @@
   .rtl-reverse { @apply rtl:flex-row-reverse; }
   .rtl-space { @apply rtl:space-x-reverse; }
 
+  /* Sticky save bar — sits above the mobile nav on mobile, at viewport bottom on desktop */
+  .save-bar-bottom {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+  }
+  @media (min-width: 1024px) {
+    .save-bar-bottom { bottom: 0; }
+  }
+
   /* Respect reduced motion — wrap all non-essential animations */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Save,
   Building2,
@@ -471,9 +472,12 @@ function TabEntreprise({
         </div>
       </div>
 
-      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-64 right-0 lg:right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-200/60 p-4 px-6 flex justify-center lg:justify-end z-40 shadow-[0_-20px_40px_rgba(0,0,0,0.08)]">
-        <SaveButton loading={loading || uploading} onClick={handleSave} />
-      </div>
+      {createPortal(
+        <div className="save-bar-bottom fixed left-0 lg:left-64 right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-200/60 p-4 px-6 flex justify-center lg:justify-end z-40 shadow-[0_-20px_40px_rgba(0,0,0,0.08)]">
+          <SaveButton loading={loading || uploading} onClick={handleSave} />
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -588,9 +592,12 @@ function TabFacturation({
         </div>
       </div>
 
-      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-[260px] right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
-        <SaveButton loading={loading} onClick={handleSave} />
-      </div>
+      {createPortal(
+        <div className="save-bar-bottom fixed left-0 lg:left-64 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
+          <SaveButton loading={loading} onClick={handleSave} />
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -693,9 +700,12 @@ function TabBanque({
         </div>
       </div>
 
-      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-[260px] right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
-        <SaveButton loading={loading} onClick={handleSave} />
-      </div>
+      {createPortal(
+        <div className="save-bar-bottom fixed left-0 lg:left-64 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
+          <SaveButton loading={loading} onClick={handleSave} />
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

@@ -1,20 +1,15 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Package, 
-  Plus, 
-  MoreVertical, 
-  FileEdit, 
-  Trash2,
-  Box,
-  CheckCircle2,
-  AlertCircle,
-  EyeOff,
-  Eye,
-  Loader2
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  Package, Plus, FileEdit, Trash2, Eye, EyeOff,
+  MoreVertical, Loader2, Box,
 } from 'lucide-react';
 import { useProducts } from '../hooks/useProducts';
 import { formatMAD } from '../lib/tva';
 import ProductForm from '../components/products/ProductForm';
+import { useToast } from '../components/ui/Toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import EmptyState from '../components/ui/EmptyState';
 import type { Product, ProductUnit } from '../types';
 
 const UNIT_LABELS: Record<ProductUnit, string> = {
@@ -24,240 +19,339 @@ const UNIT_LABELS: Record<ProductUnit, string> = {
   kg: 'Kg',
   m2: 'm²',
   forfait: 'Forfait',
-  lot: 'Lot'
-};
-
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  'Produit': <Package className="w-3.5 h-3.5" />,
-  'Service': <Box className="w-3.5 h-3.5" />,
-  'Matériel': <Package className="w-3.5 h-3.5" />, // Re-using Package but could unique
-  'Forfait': <CheckCircle2 className="w-3.5 h-3.5" />,
-  'Software': <Box className="w-3.5 h-3.5" />,
-  'Consulting': <Box className="w-3.5 h-3.5" />,
-  'Abonnement': <Box className="w-3.5 h-3.5" />,
-  'Autre': <MoreVertical className="w-3.5 h-3.5" />
+  lot: 'Lot',
 };
 
 export default function Products() {
   const { products, loading, categories, removeProduct, toggleActive } = useProducts();
+  const { success, error: toastError } = useToast();
+
   const [activeTab, setActiveTab] = useState<'all' | string>('all');
-  
-  // Dialog Controllers
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [toast, setToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const close = () => { if (activeDropdown) setActiveDropdown(null); };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [activeDropdown]);
 
-  const handleCreate = () => {
-    setEditingProduct(null);
-    setIsFormOpen(true);
-  };
+  const handleCreate = () => { setEditingProduct(null); setIsFormOpen(true); };
+  const handleEdit = (product: Product) => { setEditingProduct(product); setIsFormOpen(true); setActiveDropdown(null); };
 
-  const handleEdit = (product: Product) => {
-    setEditingProduct(product);
-    setIsFormOpen(true);
-  };
-
-  const handleDelete = async (product: Product) => {
-    if (window.confirm(`Confirmer la suppression du produit "${product.label}" ?`)) {
-      try {
-        await removeProduct(product.id);
-        showToast('Produit supprimé de votre catalogue.');
-      } catch (err) {
-        showToast('Erreur de suppression.', 'error');
-      }
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await removeProduct(confirmDelete.id);
+      success('Produit supprimé du catalogue.');
+    } catch {
+      toastError('Erreur lors de la suppression.');
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
     }
   };
 
   const handleToggle = async (product: Product) => {
     try {
       await toggleActive(product);
-      showToast(product.isActive ? 'Produit désactivé.' : 'Produit activé.');
+      success(product.isActive ? 'Produit désactivé.' : 'Produit activé.');
     } catch {
-      showToast('Impossible de modifier le statut.', 'error');
+      toastError('Impossible de modifier le statut.');
     }
+    setActiveDropdown(null);
   };
 
-  // Locally filtered elements mapped over active layout tab structurally
   const filteredProducts = useMemo(() => {
-    let result = products;
-    if (activeTab !== 'all') {
-      result = result.filter(p => p.category === activeTab);
-    }
-    return result;
+    if (activeTab === 'all') return products;
+    return products.filter(p => p.category === activeTab);
   }, [products, activeTab]);
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[500px]">
-        <Loader2 className="w-10 h-10 animate-spin text-[#1B4965]" />
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-700" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      
-      {/* Toast Notification Limits Boundary */}
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
-          <div className={`px-6 py-3 rounded-full shadow-lg flex items-center space-x-3 text-sm font-bold text-white
-            ${toast.type === 'success' ? 'bg-[#2A9D8F]' : 'bg-rose-500'}`}
-          >
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
-            <span>{toast.msg}</span>
-          </div>
-        </div>
-      )}
+    <div className="space-y-6 animate-page-enter">
 
-      {/* Reactive Floating Slideover Configurator Component */}
-      <ProductForm 
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={doDelete}
+        loading={deleting}
+        danger
+        title="Supprimer ce produit ?"
+        message={`La suppression de "${confirmDelete?.label}" est irréversible.`}
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+      />
+
+      <ProductForm
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         product={editingProduct}
         existingCategories={categories}
-        onSuccess={showToast}
+        onSuccess={(msg) => success(msg)}
       />
 
-      {/* Header Pipeline Controller */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-           <div className="flex items-center gap-2">
-             <Box className="w-6 h-6 text-[#1B4965]" />
-             <h1 className="text-2xl font-bold text-[#1B4965]">Produits & Services</h1>
-           </div>
-          <p className="text-sm text-slate-500 mt-1">Gérez votre catalogue pour accélérer l'édition de vos factures.</p>
-        </div>
-
-        <button 
-          onClick={handleCreate}
-          className="flex items-center justify-center space-x-2 bg-[#F4A261] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#e0863f] transition-all shadow-[0_4px_14px_0_rgb(244,162,97,0.39)]"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Ajouter un produit</span>
-        </button>
-      </div>
-
-      {/* Categories Tabs Wrapper Navigation */}
-      {products.length > 0 && categories.length > 0 && (
-        <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-           <button
-             onClick={() => setActiveTab('all')}
-             className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${activeTab === 'all' ? 'bg-[#1B4965] border-[#1B4965] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
-           >
-             <Package className="w-3.5 h-3.5" />
-             Tous les produits
-           </button>
-           {categories.map(cat => (
-             <button
-               key={cat}
-               onClick={() => setActiveTab(cat)}
-               className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${activeTab === cat ? 'bg-[#1B4965] border-[#1B4965] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
-             >
-               {CATEGORY_ICONS[cat] || <Box className="w-3.5 h-3.5" />}
-               {cat}
-             </button>
-           ))}
-        </div>
-      )}
-
-      {/* Render Condition Enclosing Structure Limits */}
-      {filteredProducts.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-100 border-dashed p-12 flex flex-col items-center justify-center text-center">
-          <div className="w-20 h-20 bg-[#F4A261]/10 rounded-full flex items-center justify-center mb-4">
-            <Package className="w-10 h-10 text-[#F4A261]" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-800 mb-2">Catalogue vide</h3>
-          <p className="text-slate-500 max-w-sm mx-auto mb-6">
-             {activeTab === 'all' 
-               ? "Créez votre catalogue de produits et services pour facturer plus vite."
-               : "Aucun produit dans cette catégorie."}
+          <h1 className="text-xl font-bold text-slate-900">Produits & Services</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
+            {products.length} article{products.length !== 1 ? 's' : ''} dans le catalogue
           </p>
-          {activeTab === 'all' && (
-            <button onClick={handleCreate} className="text-[#1B4965] font-bold hover:underline">
-              + Ajouter un premier forfait
-            </button>
-          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {filteredProducts.map(product => (
-              <div 
-                key={product.id} 
-                className={`relative bg-white rounded-2xl p-5 border transition-all hover:shadow-lg ${!product.isActive ? 'border-slate-100 opacity-60 bg-slate-50' : 'border-slate-200 hover:border-[#5FA8D3]/50 shadow-sm'}`}
-              >
-                 {/* Top Context & Settings Limit */}
-                 <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center space-x-2">
-                       {product.category && (
-                         <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 bg-slate-100 text-slate-500 rounded-md">
-                           {product.category}
-                         </span>
-                       )}
-                       {!product.isActive && (
-                         <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 bg-rose-100 text-rose-600 rounded-md">
-                           Inactif
-                         </span>
-                       )}
-                    </div>
-                    {/* Action Dropdown Group Limits Overlay */}
-                    <div className="flex items-center space-x-1">
-                      <button onClick={() => handleToggle(product)} title={product.isActive ? 'Désactiver' : 'Activer'} className={`p-1.5 rounded-lg transition-colors ${product.isActive ? 'text-slate-400 hover:bg-rose-50 hover:text-rose-500' : 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-500'}`}>
-                         {product.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => handleEdit(product)} title="Modifier" className="p-1.5 text-slate-400 hover:bg-[#5FA8D3]/10 hover:text-[#5FA8D3] rounded-lg transition-colors">
-                         <FileEdit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(product)} title="Supprimer" className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
-                         <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                 </div>
+        <button
+          onClick={handleCreate}
+          className="hidden sm:inline-flex items-center gap-2 bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-btn hover:bg-primary-800 active:scale-[0.97] transition-all focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+        >
+          <Plus className="w-4 h-4" />
+          Nouveau produit
+        </button>
+      </div>
 
-                 {/* Core Information Base Mapping */}
-                 <h3 className="font-bold text-lg text-[#1B4965] leading-tight mb-1 line-clamp-2" title={product.label}>
-                    {product.label}
-                 </h3>
-                 <p className="text-sm text-slate-500 line-clamp-2 h-10 mb-4" title={product.description}>
-                    {product.description || <span className="italic opacity-50">Aucune description</span>}
-                 </p>
-
-                 {/* Financial Math Bounds Tracker */}
-                 <div className="pt-4 border-t border-slate-100 flex items-end justify-between">
-                    <div>
-                       <div className="text-xs font-semibold text-slate-400 mb-0.5">Prix HT / {UNIT_LABELS[product.unit]}</div>
-                       <div className="font-bold text-xl text-slate-800">
-                          {formatMAD(product.unitPrice)}
-                       </div>
-                    </div>
-                    <div className={`px-2.5 py-1 rounded-full text-xs font-bold border
-                       ${product.tvaRate > 0 ? 'bg-[#5FA8D3]/10 text-[#5FA8D3] border-[#5FA8D3]/20' : 'bg-slate-100 text-slate-600 border-slate-200'}
-                    `}>
-                       TVA {product.tvaRate}%
-                    </div>
-                 </div>
-              </div>
-           ))}
+      {/* Category tabs */}
+      {categories.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-full transition-all ${
+              activeTab === 'all'
+                ? 'bg-primary-50 text-primary-700 font-semibold'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+            }`}
+          >
+            Tous
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveTab(cat)}
+              className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-full transition-all ${
+                activeTab === cat
+                  ? 'bg-primary-50 text-primary-700 font-semibold'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* ---------------- MOBILE ACTION BAR ---------------- */}
-      <div className="lg:hidden fixed bottom-[65px] left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200/60 p-4 px-6 flex items-center justify-center z-40 shadow-[0_-15px_35px_rgba(0,0,0,0.1)] rounded-t-2xl">
-        <button
-          onClick={() => {
-            setEditingProduct(null);
-            setIsFormOpen(true);
-          }}
-          className="w-full flex items-center justify-center gap-2 bg-[#1B4965] hover:bg-[#153a51] text-white py-3.5 rounded-xl font-bold transition-all shadow-[0_4px_14px_0_rgb(27,73,101,0.25)] active:scale-[0.98]"
-        >
-          <Plus className="h-5 w-5" />
-          Nouveau Produit
-        </button>
+      {/* Table */}
+      <div className="panel overflow-hidden">
+        {filteredProducts.length === 0 ? (
+          <EmptyState
+            icon={<Package className="w-7 h-7 text-primary-300" />}
+            title="Catalogue vide"
+            description={
+              activeTab !== 'all'
+                ? 'Aucun produit dans cette catégorie.'
+                : 'Créez votre catalogue de produits et services pour facturer plus vite.'
+            }
+            action={
+              activeTab === 'all' ? (
+                <button
+                  onClick={handleCreate}
+                  className="text-sm font-semibold text-primary-700 hover:underline"
+                >
+                  + Ajouter un premier produit
+                </button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="min-w-full text-left text-sm" aria-label="Catalogue produits">
+                <thead>
+                  <tr className="bg-slate-50/70 text-[11px] font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                    <th className="px-6 py-3">Produit / Service</th>
+                    <th className="px-6 py-3">Catégorie</th>
+                    <th className="px-6 py-3">Unité</th>
+                    <th className="px-6 py-3 text-right">Prix HT</th>
+                    <th className="px-6 py-3 text-center">TVA</th>
+                    <th className="px-6 py-3 text-center">Statut</th>
+                    <th className="px-6 py-3 w-10"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredProducts.map(product => (
+                    <tr
+                      key={product.id}
+                      className={`group hover:bg-primary-50/30 transition-colors duration-100 ${!product.isActive ? 'opacity-50' : ''}`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center flex-shrink-0">
+                            <Box className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 truncate max-w-[200px]">{product.label}</div>
+                            {product.description && (
+                              <div className="text-xs text-slate-400 truncate max-w-[200px]">{product.description}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        {product.category ? (
+                          <span className="badge bg-slate-100 text-slate-600 border-slate-200">{product.category}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500">
+                        {UNIT_LABELS[product.unit] ?? product.unit}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-right font-bold tabular-nums text-slate-900">
+                        {formatMAD(product.unitPrice)}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-center">
+                        <span className={`badge ${product.tvaRate > 0 ? 'bg-primary-50 text-primary-700 border-primary-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                          {product.tvaRate}%
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-center">
+                        {product.isActive ? (
+                          <span className="badge bg-success-50 text-success-600 border-success-100">Actif</span>
+                        ) : (
+                          <span className="badge bg-slate-100 text-slate-400 border-slate-200">Inactif</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-right">
+                        <div className="relative inline-block" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setActiveDropdown(activeDropdown === product.id ? null : product.id);
+                            }}
+                            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary-400"
+                            aria-label="Actions"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeDropdown === product.id && (
+                            <div className="absolute right-0 z-20 mt-1 w-48 bg-white rounded-xl shadow-modal border border-slate-100 py-1 overflow-hidden">
+                              <button
+                                onClick={() => handleEdit(product)}
+                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                <FileEdit className="w-4 h-4 text-slate-400" /> Modifier
+                              </button>
+                              <button
+                                onClick={() => handleToggle(product)}
+                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                {product.isActive
+                                  ? <><EyeOff className="w-4 h-4 text-slate-400" /> Désactiver</>
+                                  : <><Eye className="w-4 h-4 text-slate-400" /> Activer</>
+                                }
+                              </button>
+                              <div className="my-1 border-t border-slate-100" />
+                              <button
+                                onClick={() => { setActiveDropdown(null); setConfirmDelete(product); }}
+                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-danger-500 hover:bg-danger-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Supprimer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-slate-50">
+              {filteredProducts.map(product => (
+                <div
+                  key={product.id}
+                  className={`p-4 ${!product.isActive ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center flex-shrink-0">
+                        <Box className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 truncate">{product.label}</div>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {product.category && (
+                            <span className="text-xs text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">{product.category}</span>
+                          )}
+                          <span className="text-xs text-slate-400">{UNIT_LABELS[product.unit] ?? product.unit}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => handleToggle(product)}
+                        className="p-2 text-slate-400 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                      >
+                        {product.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="p-2 text-slate-400 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                      >
+                        <FileEdit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(product)}
+                        className="p-2 text-slate-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="text-sm font-bold text-slate-900 tabular-nums">{formatMAD(product.unitPrice)}</div>
+                    <div className="flex items-center gap-2">
+                      <span className={`badge text-xs ${product.tvaRate > 0 ? 'bg-primary-50 text-primary-700 border-primary-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                        TVA {product.tvaRate}%
+                      </span>
+                      {product.isActive
+                        ? <span className="badge text-xs bg-success-50 text-success-600 border-success-100">Actif</span>
+                        : <span className="badge text-xs bg-slate-100 text-slate-400 border-slate-200">Inactif</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
+
+      {/* Mobile action bar — portal escapes AnimatedPage transform context (fixes iOS fixed positioning) */}
+      {createPortal(
+        <div className="save-bar-bottom lg:hidden fixed left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-4 py-3">
+          <button
+            onClick={handleCreate}
+            className="w-full flex items-center justify-center gap-2 bg-primary-700 text-white py-3 rounded-xl text-sm font-semibold shadow-btn hover:bg-primary-800 active:scale-[0.98] transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Nouveau produit
+          </button>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
