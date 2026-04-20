@@ -27,6 +27,17 @@ const UNIT_LABELS: Record<ProductUnit, string> = {
   lot: 'Lot'
 };
 
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+  'Produit': <Package className="w-3.5 h-3.5" />,
+  'Service': <Box className="w-3.5 h-3.5" />,
+  'Matériel': <Package className="w-3.5 h-3.5" />, // Re-using Package but could unique
+  'Forfait': <CheckCircle2 className="w-3.5 h-3.5" />,
+  'Software': <Box className="w-3.5 h-3.5" />,
+  'Consulting': <Box className="w-3.5 h-3.5" />,
+  'Abonnement': <Box className="w-3.5 h-3.5" />,
+  'Autre': <MoreVertical className="w-3.5 h-3.5" />
+};
+
 export default function Products() {
   const { products, loading, categories, removeProduct, toggleActive } = useProducts();
   const [activeTab, setActiveTab] = useState<'all' | string>('all');
@@ -136,16 +147,18 @@ export default function Products() {
         <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-hide">
            <button
              onClick={() => setActiveTab('all')}
-             className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${activeTab === 'all' ? 'bg-[#1B4965] border-[#1B4965] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+             className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${activeTab === 'all' ? 'bg-[#1B4965] border-[#1B4965] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
            >
+             <Package className="w-3.5 h-3.5" />
              Tous les produits
            </button>
            {categories.map(cat => (
              <button
                key={cat}
                onClick={() => setActiveTab(cat)}
-               className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${activeTab === cat ? 'bg-[#1B4965] border-[#1B4965] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+               className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${activeTab === cat ? 'bg-[#1B4965] border-[#1B4965] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
              >
+               {CATEGORY_ICONS[cat] || <Box className="w-3.5 h-3.5" />}
                {cat}
              </button>
            ))}

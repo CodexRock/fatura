@@ -24,6 +24,17 @@ const UNIT_LABELS: Record<ProductUnit, string> = {
 
 const TVA_RATES: TvaRate[] = [0, 7, 10, 14, 20];
 
+const STANDARD_CATEGORIES = [
+  'Produit',
+  'Service',
+  'Matériel',
+  'Forfait',
+  'Software',
+  'Consulting',
+  'Abonnement',
+  'Autre'
+];
+
 export default function ProductForm({ isOpen, onClose, product, existingCategories, onSuccess }: ProductFormProps) {
   const { addProduct, editProduct } = useProducts();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -242,17 +253,48 @@ export default function ProductForm({ isOpen, onClose, product, existingCategori
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700">Catégorie</label>
-                <input 
-                  type="text" 
-                  list="categories-list"
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#5FA8D3] focus:bg-white focus:outline-none transition-colors"
-                  placeholder="Ex: Services"
-                />
-                <datalist id="categories-list">
-                  {existingCategories.map(cat => <option key={cat} value={cat} />)}
-                </datalist>
+                <div className="space-y-3">
+                  <select 
+                    value={STANDARD_CATEGORIES.includes(formData.category) ? formData.category : (formData.category ? 'custom' : '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'custom') {
+                        setFormData({...formData, category: ''});
+                      } else {
+                        setFormData({...formData, category: val});
+                      }
+                    }}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#5FA8D3] focus:bg-white focus:outline-none transition-colors"
+                  >
+                    <option value="">Sélectionner une catégorie</option>
+                    <optgroup label="Standards">
+                      {STANDARD_CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </optgroup>
+                    {existingCategories.filter(c => !STANDARD_CATEGORIES.includes(c)).length > 0 && (
+                      <optgroup label="Vos catégories">
+                        {existingCategories.filter(c => !STANDARD_CATEGORIES.includes(c)).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <option value="custom">+ Nouvelle catégorie...</option>
+                  </select>
+
+                  {(!STANDARD_CATEGORIES.includes(formData.category) && !existingCategories.includes(formData.category) || (formData.category === '' && !STANDARD_CATEGORIES.includes(''))) && (
+                    <div className="animate-in slide-in-from-top-1">
+                      <input 
+                        type="text"
+                        value={formData.category}
+                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        className="w-full p-3 bg-white border border-[#5FA8D3] rounded-xl focus:outline-none shadow-sm"
+                        placeholder="Nom de la nouvelle catégorie..."
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400">Classifie les produits pour la recherche rapide.</p>
               </div>
 
