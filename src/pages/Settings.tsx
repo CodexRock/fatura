@@ -56,15 +56,15 @@ const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
 // SHARED COMPONENTS
 // =============================================================================
 
-const inputClass = 'w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5FA8D3]/40 focus:border-[#5FA8D3] transition-all text-slate-800 placeholder:text-slate-400';
+const inputClass = 'w-full px-4 py-2.5 h-11 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-400/30 focus:border-primary-400 transition-all text-slate-900 placeholder:text-slate-400 text-sm';
 const labelClass = 'block text-sm font-semibold text-slate-700 mb-1.5';
 const sectionCardClass = 'bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden';
 
 function SectionHeader({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description?: string }) {
   return (
     <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-      <div className="w-9 h-9 rounded-xl bg-[#1B4965]/5 flex items-center justify-center">
-        <Icon className="w-4.5 h-4.5 text-[#1B4965]" />
+      <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center">
+        <Icon className="w-4 h-4 text-primary-700" />
       </div>
       <div>
         <h2 className="text-base font-bold text-slate-800">{title}</h2>
@@ -79,7 +79,7 @@ function SaveButton({ loading, onClick }: { loading: boolean; onClick: () => voi
     <button
       onClick={onClick}
       disabled={loading}
-      className="group relative flex items-center justify-center gap-3 bg-[#1B4965] hover:bg-[#153a51] text-white px-8 py-3.5 rounded-2xl font-black shadow-[0_10px_25px_-5px_rgba(27,73,101,0.3)] transition-all active:scale-[0.98] disabled:opacity-50 min-w-[240px]"
+      className="group relative flex items-center justify-center gap-3 bg-primary-700 hover:bg-primary-800 text-white px-8 py-3.5 rounded-2xl font-semibold shadow-btn hover:shadow-btn-hover transition-all active:scale-[0.97] disabled:opacity-50 min-w-[240px] focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
     >
       {loading ? (
         <Loader2 className="w-5 h-5 animate-spin text-white/80" />
@@ -163,9 +163,9 @@ export default function Settings() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:ring-2 focus-visible:ring-primary-400 ${
                       active
-                        ? 'bg-[#1B4965] text-white shadow-md shadow-[#1B4965]/15'
+                        ? 'bg-primary-700 text-white shadow-btn'
                         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }`}
                   >
@@ -186,10 +186,10 @@ export default function Settings() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-primary-400 ${
                     active
-                      ? 'bg-[#1B4965] text-white shadow-md'
-                      : 'bg-white text-slate-600 border border-slate-200'
+                      ? 'bg-primary-700 text-white shadow-btn'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <Icon className="w-4 h-4" />

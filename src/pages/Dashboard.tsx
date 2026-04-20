@@ -1,338 +1,375 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  FileText, 
-  Clock, 
-  AlertCircle, 
-  Plus, 
-  Users, 
-  Download,
-  Loader2,
-  Building2,
-  ChevronRight
+import {
+  TrendingUp, TrendingDown, FileText, Clock,
+  AlertCircle, Plus, Users, Download, Loader2, Building2, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboard } from '../hooks/useDashboard';
 import { formatMAD } from '../lib/tva';
 import { INVOICE_STATUS_LABELS } from '../types';
+import { useToast } from '../components/ui/Toast';
+import Tooltip from '../components/ui/Tooltip';
 
 export default function Dashboard() {
   const { business } = useAuth();
   const navigate = useNavigate();
-  const { 
-    stats, 
-    chartData, 
-    recentInvoices, 
-    topClients, 
-    loading 
-  } = useDashboard();
+  const { toast } = useToast();
+  const { stats, chartData, recentInvoices, topClients, loading } = useDashboard();
 
-  const [toast, setToast] = useState<string | null>(null);
-
-  // Natively bounded format logic strictly overriding local states dynamically
-  const dateStr = new Intl.DateTimeFormat('fr-FR', { 
-    weekday: 'long', 
-    day: 'numeric', 
-    month: 'long', 
-    year: 'numeric' 
+  const dateStr = new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   }).format(new Date());
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[600px]">
-        <Loader2 className="w-12 h-12 animate-spin text-[#1B4965] mb-4" />
-        <p className="text-slate-500 font-medium">Chargement de votre espace...</p>
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[500px] gap-3">
+        <Loader2 className="w-10 h-10 animate-spin text-primary-700" />
+        <p className="text-slate-500 text-sm font-medium">Chargement de votre espace...</p>
       </div>
     );
   }
 
-  // Pre-calculate visual bounds executing scalable charts
   const maxChartVal = Math.max(...chartData.map(d => d.amount), 1);
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      
-      {/* Toast Notification Base Limit Overlay */}
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
-          <div className="px-6 py-3 rounded-full shadow-lg flex items-center space-x-3 text-sm font-bold text-white bg-slate-800">
-            <span>{toast}</span>
-          </div>
-        </div>
-      )}
+  // Y-axis labels (3 levels)
+  const yLabels = [maxChartVal, maxChartVal / 2, 0].map(v =>
+    v === 0 ? '0' : v >= 100000 ? `${(v / 100000).toFixed(0)}k` : `${(v / 100).toFixed(0)}`
+  );
 
-      {/* Greeting Architectural Limits Frame */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+  return (
+    <div className="space-y-6 animate-page-enter">
+
+      {/* Greeting */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
         <div>
-          <h1 className="text-3xl font-bold text-[#1B4965] tracking-tight">
-            Bonjour, {business?.tradeName || business?.legalName || 'Gérant'} 👋
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Bonjour, {business?.tradeName || business?.legalName || 'Gérant'}
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1 capitalize">
-            {dateStr}
-          </p>
+          <p className="text-sm font-medium text-slate-400 mt-0.5 capitalize">{dateStr}</p>
         </div>
       </div>
 
-      {/* Primary Analytical Metrics Enclosing Grid Mapping */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        {/* Metric Card: Chiffre d'Affaires */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
-            <TrendingUp className="w-20 h-20" />
-          </div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 bg-[#1B4965]/10 rounded-xl">
-              <TrendingUp className="w-5 h-5 text-[#1B4965]" />
+
+        {/* Revenue */}
+        <div className="card p-5 flex flex-col gap-3 relative overflow-hidden group animate-card-appear" style={{ animationDelay: '0ms' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-4.5 h-4.5 text-primary-700" />
             </div>
-            <h3 className="font-bold text-slate-500 text-sm">Chiffre d'affaires (Mois)</h3>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">CA ce mois</span>
           </div>
-          <div className="text-2xl font-black text-slate-800 mb-2 truncate">
+          <div className="text-2xl font-bold text-slate-900 tabular-nums truncate">
             {formatMAD(stats.revenueThisMonth)}
           </div>
-          <div className={`flex items-center text-xs font-bold ${stats.revenuePercentChange >= 0 ? 'text-[#2D6A4F]' : 'text-[#E63946]'}`}>
-            {stats.revenuePercentChange >= 0 ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
-            {Math.abs(stats.revenuePercentChange)}% par rapport au mois dernier
+          <div className={`flex items-center gap-1 text-xs font-semibold ${stats.revenuePercentChange >= 0 ? 'text-success-500' : 'text-danger-500'}`}>
+            {stats.revenuePercentChange >= 0
+              ? <TrendingUp className="w-3.5 h-3.5" />
+              : <TrendingDown className="w-3.5 h-3.5" />}
+            {Math.abs(stats.revenuePercentChange)}% vs mois dernier
           </div>
         </div>
 
-        {/* Metric Card: Factures Emises */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
-            <FileText className="w-20 h-20" />
-          </div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 bg-[#F4A261]/10 rounded-xl">
-              <FileText className="w-5 h-5 text-[#F4A261]" />
+        {/* Invoices */}
+        <div className="card p-5 flex flex-col gap-3 relative overflow-hidden animate-card-appear" style={{ animationDelay: '60ms' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-accent-50 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-4.5 h-4.5 text-accent-600" />
             </div>
-            <h3 className="font-bold text-slate-500 text-sm">Factures émises (Mois)</h3>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Factures ce mois</span>
           </div>
-          <div className="text-3xl font-black text-slate-800 mb-2">
+          <div className="text-3xl font-bold text-slate-900 tabular-nums">
             {stats.invoicesThisMonth}
           </div>
-          <div className={`flex items-center text-xs font-bold ${stats.invoicesPercentChange >= 0 ? 'text-[#2D6A4F]' : 'text-slate-500'}`}>
-            {stats.invoicesPercentChange >= 0 ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
-            {Math.abs(stats.invoicesPercentChange)}% par rapport au mois dernier
+          <div className={`flex items-center gap-1 text-xs font-semibold ${stats.invoicesPercentChange >= 0 ? 'text-success-500' : 'text-slate-400'}`}>
+            {stats.invoicesPercentChange >= 0
+              ? <TrendingUp className="w-3.5 h-3.5" />
+              : <TrendingDown className="w-3.5 h-3.5" />}
+            {Math.abs(stats.invoicesPercentChange)}% vs mois dernier
           </div>
         </div>
 
-        {/* Metric Card: En attente */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col relative overflow-hidden group">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 bg-amber-50 rounded-xl">
-              <Clock className="w-5 h-5 text-amber-500" />
+        {/* Pending */}
+        <div className="card p-5 flex flex-col gap-3 animate-card-appear" style={{ animationDelay: '120ms' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <Clock className="w-4.5 h-4.5 text-amber-500" />
             </div>
-            <h3 className="font-bold text-slate-500 text-sm">En attente de paiement</h3>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">En attente</span>
           </div>
-          <div className="text-2xl font-black text-slate-800 mb-2 truncate">
+          <div className="text-2xl font-bold text-slate-900 tabular-nums truncate">
             {formatMAD(stats.pendingAmount)}
           </div>
           <p className="text-xs font-semibold text-slate-400">Totalité des encours</p>
         </div>
 
-        {/* Metric Card: En retard */}
-        <button 
+        {/* Overdue — clickable */}
+        <button
           onClick={() => navigate('/invoices?filter=overdue')}
-          className="bg-white p-5 rounded-2xl border border-rose-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:border-rose-300 hover:bg-rose-50/30 transition-all flex flex-col text-left group relative overflow-hidden"
+          className="card p-5 flex flex-col gap-3 text-left cursor-pointer group border-danger-100 hover:border-danger-200 hover:bg-danger-50/30 transition-all animate-card-appear focus-visible:ring-2 focus-visible:ring-primary-400"
+          style={{ animationDelay: '180ms' }}
         >
-           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
-            <AlertCircle className="w-20 h-20 text-rose-500" />
-          </div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 bg-[#E63946]/10 rounded-xl">
-              <AlertCircle className="w-5 h-5 text-[#E63946]" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-danger-50 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-4.5 h-4.5 text-danger-500" />
             </div>
-            <h3 className="font-bold text-[#E63946] text-sm">Factures en retard</h3>
+            <span className="text-xs font-semibold text-danger-500 uppercase tracking-wide">En retard</span>
           </div>
-          <div className="text-3xl font-black text-[#E63946] mb-2">
+          <div className="text-3xl font-bold text-danger-500 tabular-nums">
             {stats.overdueCount}
           </div>
-          <p className="text-xs font-semibold text-[#E63946]/70 flex items-center group-hover:underline">
-            Voir les relances nécessaires <ChevronRight className="w-3 h-3 ml-1" />
+          <p className="text-xs font-semibold text-danger-400 flex items-center gap-1 group-hover:underline">
+            Voir les relances <ChevronRight className="w-3 h-3" />
           </p>
         </button>
-
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
-        {/* Visual Revenue Native SVG Rendering Bounded Safely */}
-        <div className="xl:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
-          <h2 className="font-bold text-lg text-[#1B4965] mb-6 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-slate-400" />
-            Évolution du CA (Derniers 6 mois)
-          </h2>
-          
-          <div className="flex flex-col h-[280px]">
-             {/* Chart Bounds Executed */}
-             <div className="flex-1 flex items-end gap-3 sm:gap-6 relative z-10 pt-8">
-               {chartData.map((data, idx) => (
-                  <div key={idx} className="flex-1 flex flex-col justify-end items-center h-full group relative">
-                    {/* Tooltip Hover Overlay Computation */}
-                    <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs font-bold py-1.5 px-3 rounded-lg pointer-events-none whitespace-nowrap shadow-xl">
-                       {formatMAD(data.amount)}
-                       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
-                    </div>
-                    {/* Pure CSS Bar Scaling Limits Base Map */}
-                    <div 
-                      className={`w-full max-w-[48px] rounded-t-lg transition-all duration-700 ease-out 
-                        ${idx === chartData.length -1 ? 'bg-[#F4A261] group-hover:bg-[#e0863f]' : 'bg-[#1B4965]/80 group-hover:bg-[#1B4965]'}
-                      `}
-                      style={{ height: `${(data.amount / maxChartVal) * 100}%`, minHeight: data.amount > 0 ? '8px' : '2px' }}
-                    />
+      {/* Chart + Quick Actions */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+        {/* Revenue Chart */}
+        <div className="xl:col-span-2 panel p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-semibold text-[15px] text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-400" />
+              Évolution du CA (6 derniers mois)
+            </h2>
+          </div>
+
+          {/* Chart body */}
+          <div className="flex gap-4 h-[240px]">
+            {/* Y-axis */}
+            <div className="flex flex-col justify-between items-end pb-10 flex-shrink-0 w-10">
+              {yLabels.map((label, i) => (
+                <span key={i} className="text-[10px] font-medium text-slate-400 tabular-nums">{label}</span>
+              ))}
+            </div>
+
+            {/* Bars + x-labels */}
+            <div className="flex-1 flex flex-col">
+              {/* Grid lines + bars */}
+              <div className="flex-1 relative">
+                {/* Horizontal grid lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="border-t border-dashed border-slate-100 w-full" />
+                  ))}
+                </div>
+
+                {/* Bars */}
+                <div className="absolute inset-0 flex items-end gap-2 sm:gap-4 px-1">
+                  {chartData.map((data, idx) => {
+                    const heightPct = (data.amount / maxChartVal) * 100;
+                    const isCurrentMonth = idx === chartData.length - 1;
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col justify-end items-center h-full group relative">
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                          <div className="bg-white border border-slate-100 shadow-modal text-slate-900 text-xs font-semibold py-1.5 px-3 rounded-xl whitespace-nowrap tabular-nums">
+                            {formatMAD(data.amount)}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-100" />
+                          </div>
+                        </div>
+                        {/* Bar */}
+                        <div
+                          className={`w-full max-w-[36px] rounded-t-lg transition-all duration-500 ease-out origin-bottom [animation:bar-grow_600ms_ease-out_both] ${
+                            isCurrentMonth
+                              ? 'bg-accent-500 group-hover:bg-accent-600'
+                              : 'bg-primary-200 group-hover:bg-primary-400'
+                          }`}
+                          style={{
+                            height: `${heightPct}%`,
+                            minHeight: data.amount > 0 ? '6px' : '2px',
+                            animationDelay: `${idx * 60}ms`,
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* X-axis labels */}
+              <div className="flex gap-2 sm:gap-4 px-1 mt-2 h-6">
+                {chartData.map((data, idx) => (
+                  <div key={idx} className="flex-1 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider truncate">
+                    {data.label}
                   </div>
-               ))}
-             </div>
-             {/* Labels Baseline Alignment Architecture */}
-             <div className="flex gap-3 sm:gap-6 mt-4 border-t border-slate-100 pt-3 relative z-0">
-               {chartData.map((data, idx) => (
-                  <div key={idx} className="flex-1 text-center text-xs font-bold text-slate-500 uppercase tracking-widest">
-                     {data.label}
-                  </div>
-               ))}
-             </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Tactical Actions Dashboard Enclosure */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col">
-          <h2 className="font-bold text-lg text-[#1B4965] mb-6">Actions rapides</h2>
-          
-          <div className="flex flex-col gap-4 flex-1 justify-center">
-             <button 
-               onClick={() => navigate('/invoices/new')}
-               className="w-full flex items-center justify-center gap-3 bg-[#1B4965] hover:bg-[#153a51] text-white py-4 px-6 rounded-2xl font-bold transition-all shadow-[0_4px_14px_0_rgb(27,73,101,0.25)] active:scale-[0.98]"
-             >
-               <Plus className="w-5 h-5 flex-shrink-0" />
-               Nouvelle facture
-             </button>
+        {/* Quick Actions */}
+        <div className="panel p-6 flex flex-col">
+          <h2 className="font-semibold text-[15px] text-slate-900 mb-5">Actions rapides</h2>
 
-             <button 
-               onClick={() => navigate('/clients')}
-               className="w-full flex items-center justify-center gap-3 bg-[#F4A261] hover:bg-[#e0863f] text-white py-4 px-6 rounded-2xl font-bold transition-all shadow-[0_4px_14px_0_rgb(244,162,97,0.30)] active:scale-[0.98]"
-             >
-               <Users className="w-5 h-5 flex-shrink-0" />
-               Ajouter un client
-             </button>
+          <div className="flex flex-col gap-3 flex-1 justify-center">
+            <button
+              onClick={() => navigate('/invoices/new')}
+              className="w-full flex items-center justify-center gap-2.5 bg-primary-700 hover:bg-primary-800 text-white py-3.5 px-5 rounded-xl font-semibold text-sm transition-all shadow-btn hover:shadow-btn-hover active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+            >
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              Nouvelle facture
+            </button>
 
-             <button 
-               onClick={() => showToast('Génération Télédéclaration DGI : Bientôt disponible pour la V1.')}
-               className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-[#1B4965] hover:text-[#1B4965] text-slate-600 py-3.5 px-6 rounded-2xl font-bold transition-all active:scale-[0.98]"
-             >
-               <Download className="w-5 h-5 flex-shrink-0" />
-               Exporter TVA (DGI)
-             </button>
-          </div>
-        </div>
-      </div>
+            <button
+              onClick={() => navigate('/clients')}
+              className="w-full flex items-center justify-center gap-2.5 bg-accent-500 hover:bg-accent-600 text-white py-3.5 px-5 rounded-xl font-semibold text-sm transition-all shadow-btn-accent active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2"
+            >
+              <Users className="w-4 h-4 flex-shrink-0" />
+              Ajouter un client
+            </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         
-         {/* Recent Invoices Map Overlay Limits bounded implicitly */}
-         <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-               <h2 className="font-bold text-lg text-[#1B4965]">Factures récentes</h2>
-               <button onClick={() => navigate('/invoices')} className="text-sm font-bold text-[#F4A261] hover:underline">
-                  Voir tout
-               </button>
-            </div>
-            <div className="overflow-x-auto">
-               <table className="w-full text-left">
-                 <thead>
-                   <tr className="bg-slate-50/50 text-slate-400 text-xs uppercase tracking-wider font-semibold border-b border-slate-100">
-                     <th className="px-6 py-4">Numéro</th>
-                     <th className="px-6 py-4">Date</th>
-                     <th className="px-6 py-4">Client</th>
-                     <th className="px-6 py-4 text-right">Montant TTC</th>
-                     <th className="px-6 py-4 text-center">Statut</th>
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y divide-slate-100">
-                   {recentInvoices.length === 0 ? (
-                      <tr>
-                         <td colSpan={5} className="px-6 py-8 text-center text-slate-500 italic">
-                            Aucune facture récente.
-                         </td>
-                      </tr>
-                   ) : recentInvoices.map((inv) => {
-                       const conf = INVOICE_STATUS_LABELS[inv.status];
-                       return (
-                         <tr 
-                           key={inv.id} 
-                           onClick={() => navigate(`/invoices/${inv.id}`)}
-                           className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
-                         >
-                            <td className="px-6 py-4 font-mono font-bold text-slate-700 group-hover:text-[#5FA8D3]">
-                              {inv.number}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-medium text-slate-500">
-                              {inv.issueDate ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(inv.issueDate.toDate()) : 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-bold text-[#1B4965]">
-                              ID: {inv.clientId.substring(0,6)}... {/* Ideallly mapped via client names but ID is valid mapping baseline safely */}
-                            </td>
-                            <td className="px-6 py-4 text-right font-black text-slate-800">
-                              {formatMAD(inv.totals?.totalTTC || 0)}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${conf.color}`}>
-                                {conf.fr}
-                              </span>
-                            </td>
-                         </tr>
-                       );
-                   })}
-                 </tbody>
-               </table>
-            </div>
-         </div>
-
-         {/* Performant Top Clients Grid Overlay List Maps Logic */}
-         <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-               <h2 className="font-bold text-lg text-[#1B4965]">Meilleurs Clients</h2>
-               <Users className="w-5 h-5 text-slate-400" />
-            </div>
-            <div className="p-6 flex-1 flex flex-col gap-5">
-               {topClients.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center">
-                     <Building2 className="w-12 h-12 text-slate-200 mb-3" />
-                     <p className="text-sm text-slate-500 font-medium">Facturez vos clients pour qu'ils apparaissent ici.</p>
-                  </div>
-               ) : topClients.map((client, idx) => (
-                  <div key={client.id} className="flex items-center justify-between group cursor-pointer" onClick={() => navigate('/clients')}>
-                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-sm group-hover:bg-[#1B4965] group-hover:text-white transition-colors">
-                           {idx + 1}
-                        </div>
-                        <div>
-                           <h4 className="font-bold text-slate-800 group-hover:text-[#5FA8D3] transition-colors">{client.name}</h4>
-                           <p className="text-xs font-semibold text-slate-400 mt-0.5 max-w-[120px] truncate">{client.ice || 'Sans ICE'}</p>
-                        </div>
-                     </div>
-                     <div className="font-bold text-[#1B4965] bg-[#1B4965]/5 px-3 py-1.5 rounded-lg flex items-center">
-                        {formatMAD(client.totalPaid)}
-                     </div>
-                  </div>
-               ))}
-            </div>
-            {topClients.length > 0 && (
-              <button 
-                onClick={() => navigate('/clients')}
-                className="p-4 border-t border-slate-100 text-sm font-bold text-slate-500 hover:text-[#1B4965] hover:bg-slate-50 transition-colors w-full rounded-b-3xl"
+            <Tooltip content="Bientôt disponible" position="top">
+              <button
+                disabled
+                className="w-full flex items-center justify-center gap-2.5 bg-white border border-slate-200 text-slate-400 py-3.5 px-5 rounded-xl font-semibold text-sm cursor-not-allowed opacity-60"
+                aria-disabled="true"
               >
-                Gérer le portefeuille client
+                <Download className="w-4 h-4 flex-shrink-0" />
+                Exporter TVA (DGI)
               </button>
-            )}
-         </div>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
 
+      {/* Recent Invoices + Top Clients */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* Recent Invoices */}
+        <div className="lg:col-span-2 panel overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <h2 className="font-semibold text-[15px] text-slate-900">Factures récentes</h2>
+            <button
+              onClick={() => navigate('/invoices')}
+              className="text-sm font-semibold text-accent-600 hover:text-accent-700 hover:underline transition-colors"
+            >
+              Voir tout
+            </button>
+          </div>
+
+          {recentInvoices.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-primary-50 flex items-center justify-center mb-4">
+                <FileText className="w-7 h-7 text-primary-300" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-700 mb-1">Aucune facture encore</h3>
+              <p className="text-xs text-slate-400 mb-5">Créez votre première facture en moins de 2 minutes.</p>
+              <button
+                onClick={() => navigate('/invoices/new')}
+                className="text-sm font-semibold text-primary-700 hover:text-primary-800 hover:underline"
+              >
+                Créer une facture →
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left" aria-label="Factures récentes">
+                <thead>
+                  <tr className="bg-slate-50/70 text-[11px] font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                    <th className="px-6 py-3">Numéro</th>
+                    <th className="px-6 py-3">Date</th>
+                    <th className="px-6 py-3">Client</th>
+                    <th className="px-6 py-3 text-right">Montant TTC</th>
+                    <th className="px-6 py-3 text-center">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {recentInvoices.map(inv => {
+                    const conf = INVOICE_STATUS_LABELS[inv.status];
+                    const dateDisplay = inv.issueDate
+                      ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                          .format(inv.issueDate.toDate())
+                      : '–';
+                    return (
+                      <tr
+                        key={inv.id}
+                        onClick={() => navigate(`/invoices/${inv.id}`)}
+                        className="hover:bg-primary-50/30 transition-colors duration-100 cursor-pointer group"
+                      >
+                        <td className="px-6 py-3.5 font-mono font-semibold text-sm text-slate-700 group-hover:text-primary-700 transition-colors">
+                          {inv.number}
+                        </td>
+                        <td className="px-6 py-3.5 text-sm text-slate-500 tabular-nums">
+                          {dateDisplay}
+                        </td>
+                        <td className="px-6 py-3.5 text-sm font-semibold text-slate-800">
+                          {inv.clientName}
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-bold text-sm text-slate-900 tabular-nums">
+                          {formatMAD(inv.totals?.totalTTC || 0)}
+                        </td>
+                        <td className="px-6 py-3.5 text-center">
+                          <span className={`badge ${conf.color}`}>
+                            {conf.fr}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Top Clients */}
+        <div className="panel flex flex-col overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+            <h2 className="font-semibold text-[15px] text-slate-900">Meilleurs clients</h2>
+            <Users className="w-4 h-4 text-slate-300" />
+          </div>
+
+          <div className="p-6 flex-1 flex flex-col gap-4">
+            {topClients.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+                <Building2 className="w-10 h-10 text-slate-200 mb-3" />
+                <p className="text-sm text-slate-400 font-medium leading-snug">
+                  Facturez vos clients pour les voir ici.
+                </p>
+              </div>
+            ) : (
+              topClients.map((client, idx) => (
+                <button
+                  key={client.id}
+                  className="flex items-center justify-between group cursor-pointer text-left w-full"
+                  onClick={() => navigate('/clients')}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-xs group-hover:bg-primary-700 group-hover:text-white transition-all flex-shrink-0">
+                      {idx + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-slate-800 group-hover:text-primary-700 transition-colors truncate">
+                        {client.name}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate max-w-[120px]">
+                        {client.ice || 'Sans ICE'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="font-bold text-xs text-primary-700 bg-primary-50 px-2.5 py-1.5 rounded-lg tabular-nums flex-shrink-0 ml-2">
+                    {formatMAD(client.totalPaid)}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          {topClients.length > 0 && (
+            <button
+              onClick={() => navigate('/clients')}
+              className="px-6 py-4 border-t border-slate-100 text-sm font-semibold text-slate-400 hover:text-primary-700 hover:bg-slate-50 transition-colors w-full text-left"
+            >
+              Gérer le portefeuille →
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

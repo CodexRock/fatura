@@ -6,40 +6,93 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+    @apply bg-background text-slate-900 font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  /* Support for RTL and Arabic typography */
   html[dir="rtl"] body {
     @apply font-arabic;
   }
+
+  /* Tabular numbers for all financial figures */
+  .tabular-nums, [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Consistent focus ring across all interactive elements */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-400 ring-offset-2;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-300;
+  }
+
+  /* Hide scrollbar utility */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
 @layer components {
-  /* Common layout containers */
   .container-fluid {
-    @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    @apply w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8;
   }
-  
-  /* Input elements base styles */
+
+  /* Unified card surface */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-100 shadow-card;
+  }
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-slate-200 hover:shadow-card-hover;
+  }
+  .panel {
+    @apply bg-white rounded-3xl border border-slate-100 shadow-card;
+  }
+
+  /* Unified input base — use this for all raw inputs not using the Input component */
   .input-field {
-    @apply flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-secondary disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex h-11 w-full rounded-xl border border-slate-200 bg-white px-4 py-0 text-sm
+           text-slate-900 placeholder:text-slate-400
+           focus:outline-none focus:ring-2 focus:ring-primary-400/30 focus:border-primary-400
+           disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50
+           transition-all duration-150;
+  }
+
+  /* Numeric display — for financial amounts */
+  .amount {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Status badge base */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg
+           text-xs font-semibold leading-none;
   }
 }
 
 @layer utilities {
-  .flex-center {
-    @apply flex items-center justify-center;
-  }
-  .flex-between {
-    @apply flex items-center justify-between;
-  }
+  .flex-center { @apply flex items-center justify-center; }
+  .flex-between { @apply flex items-center justify-between; }
+  .rtl-reverse { @apply rtl:flex-row-reverse; }
+  .rtl-space { @apply rtl:space-x-reverse; }
 
-  /* Toggle RTL layout gracefully */
-  .rtl-reverse {
-    @apply rtl:flex-row-reverse;
-  }
-  .rtl-space {
-    @apply rtl:space-x-reverse;
+  /* Respect reduced motion — wrap all non-essential animations */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Plus, Bell, Globe, LogOut } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { Menu, Plus, Bell, Globe } from 'lucide-react';
+import { useState } from 'react';
+import { useSidebar } from '../../contexts/SidebarContext';
 
 export default function Header() {
-  const { logout } = useAuth();
+  const { toggle } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
@@ -16,7 +16,6 @@ export default function Header() {
     document.documentElement.lang = newLang;
   };
 
-  // Helper determining the context title based on precise pathname
   const getPageContext = () => {
     const path = location.pathname;
     if (path.startsWith('/invoices/new')) return { title: 'Nouvelle Facture', parent: 'Factures' };
@@ -25,84 +24,73 @@ export default function Header() {
     if (path === '/clients') return { title: 'Clients', parent: null };
     if (path === '/products') return { title: 'Produits', parent: null };
     if (path === '/settings') return { title: 'Paramètres', parent: null };
-    return { title: 'Aperçu', parent: 'Tableau de bord' };
+    return { title: 'Tableau de bord', parent: null };
   };
 
   const { title, parent } = getPageContext();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-16 bg-white border-b border-slate-100 shadow-sm/50">
-      
-      {/* Mobile Structure: Hamburger + Logo */}
+    <header className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-16 bg-white border-b border-slate-100">
+
+      {/* Mobile: Hamburger + Logo */}
       <div className="flex lg:hidden items-center gap-3">
-        <button className="p-2 -ml-2 text-slate-500 hover:text-slate-800 rounded-lg focus:outline-none focus:bg-slate-50 transition-colors">
-          <Menu className="w-6 h-6" />
+        <button
+          onClick={toggle}
+          className="p-2 -ml-2 text-slate-500 hover:text-slate-800 rounded-xl hover:bg-slate-50 transition-colors focus-visible:ring-2 focus-visible:ring-primary-400"
+          aria-label="Ouvrir le menu"
+        >
+          <Menu className="w-5 h-5" />
         </button>
-        <div className="w-8 h-8 rounded-lg bg-[#1B4965] text-white flex items-center justify-center font-bold text-lg leading-none shadow-sm">
+        <div className="w-7 h-7 rounded-lg bg-primary-700 text-white flex items-center justify-center font-bold text-sm shadow-btn">
           F
         </div>
       </div>
 
-      {/* Desktop Structure: Contextual Breadcrumb */}
-      <div className="hidden lg:flex items-center space-x-2 text-sm text-slate-600">
+      {/* Desktop: Breadcrumb */}
+      <nav className="hidden lg:flex items-center gap-2 text-sm" aria-label="Fil d'Ariane">
         {parent ? (
           <>
-            <span className="font-medium hover:text-slate-800 cursor-pointer">{parent}</span>
-            <span className="text-slate-300">/</span>
-            <span className="font-semibold text-slate-900 border-b-2 border-[#5FA8D3] pb-0.5">{title}</span>
+            <span
+              className="font-medium text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
+              onClick={() => navigate(-1)}
+            >
+              {parent}
+            </span>
+            <span className="text-slate-200">/</span>
+            <span className="font-semibold text-slate-900">{title}</span>
           </>
         ) : (
-          <span className="font-bold text-[#1B4965] text-lg">{title}</span>
+          <span className="font-semibold text-slate-900 text-[15px]">{title}</span>
         )}
-      </div>
+      </nav>
 
-      {/* Interactions (Both Desktop & Mobile Layout) */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        
-        {/* Bilingual Quick Toggle */}
+      {/* Right actions */}
+      <div className="flex items-center gap-2">
+        {/* Language toggle */}
         <button
           onClick={toggleLang}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#1B4965] bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg transition-colors border border-slate-200"
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors border border-slate-200 hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-primary-400"
           title="Changer de langue"
         >
-          <Globe className="w-4 h-4" />
-          <span className="hidden sm:inline">{lang === 'fr' ? 'AR' : 'FR'}</span>
+          <Globe className="w-3.5 h-3.5" />
+          <span>{lang === 'fr' ? 'FR' : 'AR'}</span>
         </button>
 
-        {/* Mobile Bell Notice */}
-        <button className="lg:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-full relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
+        {/* Notifications */}
+        <button className="relative p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-colors focus-visible:ring-2 focus-visible:ring-primary-400">
+          <Bell className="w-4.5 h-4.5" />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-danger-500 rounded-full ring-2 ring-white" />
         </button>
 
-        {/* Mobile Logout */}
-        <button 
-          onClick={logout}
-          className="lg:hidden p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors"
-          title="Se déconnecter"
-        >
-          <LogOut className="w-5 h-5" />
-        </button>
-
-        {/* Mobile Call to Action */}
+        {/* New Invoice CTA */}
         <button
           onClick={() => navigate('/invoices/new')}
-          className="sm:hidden p-1.5 bg-[#1B4965] text-white rounded-lg shadow-[0_2px_8px_0_rgb(27,73,101,0.25)] active:scale-95 transition-all"
-          title="Nouvelle facture"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
-
-        {/* Desktop Call to Action */}
-        <button
-          onClick={() => navigate('/invoices/new')}
-          className="hidden sm:flex items-center gap-2 bg-[#1B4965] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#153a51] transition-all shadow-[0_4px_14px_0_rgb(27,73,101,0.25)] active:scale-95"
+          className="flex items-center gap-2 bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary-800 transition-all shadow-btn active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
         >
           <Plus className="w-4 h-4" />
-          Nouvelle facture
+          <span className="hidden sm:inline">Nouvelle facture</span>
         </button>
       </div>
-
     </header>
   );
 }
