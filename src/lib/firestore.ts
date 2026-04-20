@@ -388,10 +388,20 @@ export async function updateInvoiceStatus(businessId: string, invoiceId: string,
   const invoiceRef = doc(db, `businesses/${businessId}/invoices`, invoiceId).withConverter(converters.invoice);
   
   await runTransaction(db, async (transaction) => {
+    // 1. All Reads First
     const invoiceSnap = await transaction.get(invoiceRef);
     if (!invoiceSnap.exists()) return;
     
     const invoice = invoiceSnap.data();
+
+    let clientSnap = null;
+    let clientRef = null;
+    if (invoice.clientId) {
+      clientRef = doc(db, `businesses/${businessId}/clients`, invoice.clientId).withConverter(converters.client);
+      clientSnap = await transaction.get(clientRef);
+    }
+
+    // 2. Logic & Calculations
     const oldStatus = invoice.status;
     if (oldStatus === newStatus) return;
 
@@ -404,46 +414,42 @@ export async function updateInvoiceStatus(businessId: string, invoiceId: string,
       updates.sentAt = serverTimestamp();
     }
 
+    // 3. All Writes Last
     transaction.update(invoiceRef, updates);
 
     // Sync client totals if needed
-    if (invoice.clientId) {
-      const clientRef = doc(db, `businesses/${businessId}/clients`, invoice.clientId).withConverter(converters.client);
-      const clientSnap = await transaction.get(clientRef);
-      
-      if (clientSnap.exists()) {
-        const client = clientSnap.data();
-        const ttc = invoice.totals.totalTTC;
-        const paidAmount = invoice.payments?.reduce((s, p) => s + p.amount, 0) || 0;
-        const remaining = ttc - paidAmount;
+    if (clientRef && clientSnap?.exists()) {
+      const client = clientSnap.data();
+      const ttc = invoice.totals.totalTTC;
+      const paidAmount = invoice.payments?.reduce((s, p) => s + p.amount, 0) || 0;
+      const remaining = ttc - paidAmount;
 
-        let totalInvoicedDelta = 0;
-        let balanceDelta = 0;
+      let totalInvoicedDelta = 0;
+      let balanceDelta = 0;
 
-        // Transition logic
-        // 1. Moving FROM draft TO active
-        if (oldStatus === 'draft' && (newStatus !== 'draft' && newStatus !== 'cancelled')) {
-          totalInvoicedDelta = ttc;
-          balanceDelta = remaining;
-        }
-        // 2. Moving FROM active TO cancelled
-        else if ((oldStatus !== 'draft' && oldStatus !== 'cancelled') && newStatus === 'cancelled') {
-          totalInvoicedDelta = -ttc;
-          balanceDelta = -remaining;
-        }
-        // 3. Moving FROM cancelled TO active
-        else if (oldStatus === 'cancelled' && (newStatus !== 'draft' && newStatus !== 'cancelled')) {
-          totalInvoicedDelta = ttc;
-          balanceDelta = remaining;
-        }
+      // Transition logic
+      // 1. Moving FROM draft TO active
+      if (oldStatus === 'draft' && (newStatus !== 'draft' && newStatus !== 'cancelled')) {
+        totalInvoicedDelta = ttc;
+        balanceDelta = remaining;
+      }
+      // 2. Moving FROM active TO cancelled
+      else if ((oldStatus !== 'draft' && oldStatus !== 'cancelled') && newStatus === 'cancelled') {
+        totalInvoicedDelta = -ttc;
+        balanceDelta = -remaining;
+      }
+      // 3. Moving FROM cancelled TO active
+      else if (oldStatus === 'cancelled' && (newStatus !== 'draft' && newStatus !== 'cancelled')) {
+        totalInvoicedDelta = ttc;
+        balanceDelta = remaining;
+      }
 
-        if (totalInvoicedDelta !== 0 || balanceDelta !== 0) {
-          transaction.update(clientRef, {
-            totalInvoiced: (client.totalInvoiced || 0) + totalInvoicedDelta,
-            balance: (client.balance || 0) + balanceDelta,
-            updatedAt: serverTimestamp()
-          });
-        }
+      if (totalInvoicedDelta !== 0 || balanceDelta !== 0) {
+        transaction.update(clientRef, {
+          totalInvoiced: (client.totalInvoiced || 0) + totalInvoicedDelta,
+          balance: (client.balance || 0) + balanceDelta,
+          updatedAt: serverTimestamp()
+        });
       }
     }
   });
