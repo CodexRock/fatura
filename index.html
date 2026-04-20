@@ -3,8 +3,38 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>fatura</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1B4965" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Apple Mobile Web App Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Fatura" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- iOS Standalone Link Handling -->
+    <script>
+      (function(document, navigator, standalone) {
+        if ((standalone in navigator) && navigator[standalone]) {
+          var curnode, location = document.location, stop = /^(a|html)$/i;
+          document.addEventListener('click', function(e) {
+            curnode = e.target;
+            while (!(stop.test(curnode.nodeName))) {
+              curnode = curnode.parentNode;
+            }
+            if ('href' in curnode && (curnode.href.indexOf('http') || ~curnode.href.indexOf(location.host)) && (!curnode.classList.contains('external'))) {
+              e.preventDefault();
+              location.href = curnode.href;
+            }
+          }, false);
+        }
+      })(document, window.navigator, 'standalone');
+    </script>
+
+    <title>Fatura - Logiciel de Facturation</title>
   </head>
   <body>
     <div id="root"></div>
