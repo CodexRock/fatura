@@ -79,10 +79,14 @@ function SaveButton({ loading, onClick }: { loading: boolean; onClick: () => voi
     <button
       onClick={onClick}
       disabled={loading}
-      className="flex items-center gap-2 bg-[#1B4965] text-white px-6 py-2.5 rounded-xl font-medium hover:bg-[#133A54] transition-all focus:ring-4 focus:ring-[#5FA8D3]/20 disabled:opacity-50 shadow-md shadow-[#1B4965]/10 active:scale-[0.98]"
+      className="group relative flex items-center justify-center gap-3 bg-[#1B4965] hover:bg-[#153a51] text-white px-8 py-3.5 rounded-2xl font-black shadow-[0_10px_25px_-5px_rgba(27,73,101,0.3)] transition-all active:scale-[0.98] disabled:opacity-50 min-w-[240px]"
     >
-      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-      Enregistrer
+      {loading ? (
+        <Loader2 className="w-5 h-5 animate-spin text-white/80" />
+      ) : (
+        <Save className="w-5 h-5 text-white/80 group-hover:scale-110 transition-transform" />
+      )}
+      <span>Enregistrer les modifications</span>
     </button>
   );
 }
@@ -302,7 +306,7 @@ function TabEntreprise({
   };
 
   return (
-    <div className="space-y-6 pb-[75px] lg:pb-6">
+    <div className="space-y-6 pb-48 lg:pb-6">
       {/* Logo & Brand */}
       <div className={sectionCardClass}>
         <SectionHeader icon={Palette} title="Logo & Marque" description="Personnalisez l'apparence de vos factures" />
@@ -467,7 +471,7 @@ function TabEntreprise({
         </div>
       </div>
 
-      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-[260px] right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 p-4 px-6 flex justify-end z-40 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
+      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-64 right-0 lg:right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-200/60 p-4 px-6 flex justify-center lg:justify-end z-40 shadow-[0_-20px_40px_rgba(0,0,0,0.08)]">
         <SaveButton loading={loading || uploading} onClick={handleSave} />
       </div>
     </div>
@@ -504,7 +508,7 @@ function TabFacturation({
   };
 
   return (
-    <div className="space-y-6 pb-[75px] lg:pb-6">
+    <div className="space-y-6 pb-48 lg:pb-6">
       {/* Invoice Numbering */}
       <div className={sectionCardClass}>
         <SectionHeader icon={FileText} title="Numérotation des Factures" description="Format séquentiel conforme DGI" />
@@ -618,7 +622,7 @@ function TabBanque({
   const hasBankInfo = bankName || rib || iban;
 
   return (
-    <div className="space-y-6 pb-[75px] lg:pb-6">
+    <div className="space-y-6 pb-48 lg:pb-6">
       <div className={sectionCardClass}>
         <SectionHeader icon={Landmark} title="Coordonnées Bancaires" description="Apparaît en pied de page de vos factures" />
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -740,7 +744,7 @@ function TabAbonnement({ business }: { business: Business }) {
   const usagePercent = usageLimit > 0 ? Math.round((usageCount / usageLimit) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-48 lg:pb-6">
       {/* Current Plan */}
       <div className={sectionCardClass}>
         <SectionHeader icon={Crown} title="Plan Actuel" />
@@ -905,7 +909,7 @@ function TabDGI({ business }: { business: Business }) {
   const rcValid = !!business.registreCommerce;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-48 lg:pb-6">
       {/* DGI Connection Status */}
       <div className={sectionCardClass}>
         <SectionHeader icon={Shield} title="Connexion DGI" description="Statut de la conformité électronique" />

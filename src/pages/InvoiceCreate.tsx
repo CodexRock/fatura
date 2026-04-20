@@ -338,7 +338,7 @@ export default function InvoiceCreate() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       {/* ---------------- LEFT PANEL: FORM ---------------- */}
-      <div className="flex-1 overflow-y-auto pb-24 md:pb-32 px-4 py-8 md:px-8 xl:px-12">
+      <div className="flex-1 overflow-y-auto pb-48 md:pb-32 px-4 py-8 md:px-8 xl:px-12">
         <div className="max-w-3xl mx-auto space-y-8">
           
           <div>
@@ -522,7 +522,8 @@ export default function InvoiceCreate() {
                             .map(prod => (
                             <button
                               key={prod.id}
-                              onMouseDown={() => {
+                              onMouseDown={(e) => {
+                                e.preventDefault(); // Prevent blur before click
                                 dispatch({ type: 'APPLY_PRODUCT', id: line.id, product: prod });
                                 setProductSearch(null);
                               }}
@@ -535,6 +536,9 @@ export default function InvoiceCreate() {
                               <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded">{formatMAD(prod.unitPrice)}</span>
                             </button>
                           ))}
+                          {products.filter(p => !productSearch.term || p.label.toLowerCase().includes(productSearch.term.toLowerCase())).length === 0 && (
+                            <div className="px-4 py-3 text-sm text-slate-500 italic">Aucun produit trouvé</div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -678,11 +682,10 @@ export default function InvoiceCreate() {
                   className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary p-3 border text-sm bg-slate-50"
                ></textarea>
              </div>
-             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex gap-3 text-sm text-slate-600">
-               <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0" />
+             <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3 text-sm text-indigo-700">
+               <AlertCircle className="h-5 w-5 text-indigo-400 flex-shrink-0" />
                <p>
-                 Conditions de paiement : <strong>Paiement à {business.defaultPaymentTermsDays} jours</strong>. 
-                 Ce délai découle des paramètres de votre entreprise. Modifiez la date d'échéance manuellement si besoin.
+                 La date d'échéance est calculée automatiquement selon les <strong>conditions de paiement</strong> sélectionnées. Vous pouvez la modifier manuellement si nécessaire.
                </p>
              </div>
           </section>
@@ -779,31 +782,31 @@ export default function InvoiceCreate() {
       </div>
 
       {/* ---------------- BOTTOM ACTION BAR ---------------- */}
-      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-64 right-0 lg:right-[380px] xl:right-[450px] bg-white/80 backdrop-blur-xl border-t border-slate-200/60 p-4 px-6 flex items-center justify-between z-40 shadow-[0_-15px_35px_rgba(0,0,0,0.1)] rounded-t-2xl lg:rounded-none">
-        <div className="md:hidden">
-          <div className="text-xs text-slate-500 font-medium">Total TTC</div>
-          <div className="text-lg font-bold text-primary tabular-nums tracking-tight">
+      <div className="fixed bottom-[65px] lg:bottom-0 left-0 lg:left-64 right-0 lg:right-[380px] xl:right-[450px] bg-white/90 backdrop-blur-2xl border-t border-slate-200/60 p-4 px-6 flex items-center justify-between z-40 shadow-[0_-20px_40px_rgba(0,0,0,0.08)] lg:rounded-none">
+        <div className="md:hidden flex-1 min-w-0 mr-4">
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5 truncate">Total TTC</div>
+          <div className="text-lg font-black text-slate-900 tabular-nums tracking-tighter truncate">
             {formatMAD(invoiceTotals.totalTTC)}
           </div>
         </div>
         
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           <button
             disabled={submitting || !isValid}
             onClick={() => handleSubmit('draft')}
-            className="px-5 py-2.5 rounded-lg font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="flex-shrink-0 px-4 sm:px-6 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all disabled:opacity-50 flex items-center gap-2 active:scale-[0.98]"
           >
             <Save className="h-4 w-4" />
             <span className="hidden sm:inline">Brouillon</span>
           </button>
           
           <button
-             disabled={submitting || !isValid}
-             onClick={() => handleSubmit('validated')}
-             className="px-6 py-2.5 rounded-lg font-bold text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 flex items-center gap-2"
+            disabled={submitting || !isValid}
+            onClick={() => handleSubmit('validated')}
+            className="flex-shrink-0 px-5 sm:px-8 py-3 rounded-xl font-black text-white bg-[#1B4965] hover:bg-[#153a51] shadow-[0_8px_20px_-6px_rgba(27,73,101,0.4)] transition-all disabled:opacity-50 flex items-center gap-2 active:scale-[0.98] whitespace-nowrap"
           >
-             <Send className="h-4 w-4" />
-             Créer et Valider
+            <Send className="h-4 w-4" />
+            Créer et Valider
           </button>
         </div>
       </div>

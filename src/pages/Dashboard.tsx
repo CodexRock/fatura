@@ -318,7 +318,7 @@ export default function Dashboard() {
                         </div>
                      </div>
                      <div className="font-bold text-[#1B4965] bg-[#1B4965]/5 px-3 py-1.5 rounded-lg flex items-center">
-                        {formatMAD(client.totalInvoiced)}
+                        {formatMAD(client.totalPaid)}
                      </div>
                   </div>
                ))}

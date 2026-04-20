@@ -41,7 +41,7 @@ export function useDashboard() {
     }
     const q = query(
        collection(db, `businesses/${business.id}/clients`),
-       orderBy('totalInvoiced', 'desc'),
+       orderBy('totalPaid', 'desc'),
        limit(5)
     );
     const unsub = onSnapshot(q, snap => {

@@ -163,7 +163,7 @@ export default function InvoiceView() {
   const paidPercentage = Math.min(100, Math.round((totalPaid / invoice.totals.totalTTC) * 100)) || 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 pb-32 md:pb-12 text-slate-900">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 pb-40 md:pb-12 text-slate-900">
       {/* Top Bar Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
@@ -286,21 +286,21 @@ export default function InvoiceView() {
               </div>
             </div>
 
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="overflow-x-auto -mx-6 sm:mx-0 px-6 sm:px-0">
               <table className="min-w-full text-left text-sm mb-8">
                 <thead>
                   <tr className="border-y border-gray-200 bg-gray-50">
-                    <th className="py-3 px-4 font-semibold text-gray-900 rounded-tl-lg">Description</th>
-                    <th className="py-3 px-4 font-semibold text-gray-900 text-right">Qté</th>
-                    <th className="py-3 px-4 font-semibold text-gray-900 text-right">Prix HT</th>
-                    <th className="py-3 px-4 font-semibold text-gray-900 text-right">TVA</th>
-                    <th className="py-3 px-4 font-semibold text-gray-900 text-right rounded-tr-lg">Total HT</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 rounded-tl-lg whitespace-nowrap">Description</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right whitespace-nowrap">Qté</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right whitespace-nowrap">Prix HT</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right whitespace-nowrap">TVA</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right rounded-tr-lg whitespace-nowrap">Total HT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {invoice.lines.map((line, idx) => (
-                    <tr key={idx}>
-                      <td className="py-3 px-4 text-gray-900 min-w-[200px]">{line.description}</td>
+                    <tr key={idx} className="group">
+                      <td className="py-3 px-4 text-gray-900 min-w-[180px] break-words">{line.description}</td>
                       <td className="py-3 px-4 text-gray-600 text-right">{line.quantity}</td>
                       <td className="py-3 px-4 text-gray-600 text-right">{formatMAD(line.unitPrice)}</td>
                       <td className="py-3 px-4 text-gray-600 text-right">{line.tvaRate}%</td>
