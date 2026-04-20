@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Package, Plus, FileEdit, Trash2, Eye, EyeOff,
   MoreVertical, Loader2, Box,
@@ -112,7 +111,7 @@ export default function Products() {
         </div>
         <button
           onClick={handleCreate}
-          className="hidden sm:inline-flex items-center gap-2 bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-btn hover:bg-primary-800 active:scale-[0.97] transition-all focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+          className="inline-flex items-center gap-2 bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-btn hover:bg-primary-800 active:scale-[0.97] transition-all focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
         >
           <Plus className="w-4 h-4" />
           Nouveau produit
@@ -339,19 +338,6 @@ export default function Products() {
         )}
       </div>
 
-      {/* Mobile action bar — portal escapes AnimatedPage transform context (fixes iOS fixed positioning) */}
-      {createPortal(
-        <div className="save-bar-bottom lg:hidden fixed left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-4 py-3">
-          <button
-            onClick={handleCreate}
-            className="w-full flex items-center justify-center gap-2 bg-primary-700 text-white py-3 rounded-xl text-sm font-semibold shadow-btn hover:bg-primary-800 active:scale-[0.98] transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Nouveau produit
-          </button>
-        </div>,
-        document.body,
-      )}
     </div>
   );
 }
