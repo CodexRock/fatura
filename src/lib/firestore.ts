@@ -281,13 +281,17 @@ export async function deleteProduct(businessId: string, productId: string): Prom
 export async function createInvoice(businessId: string, data: CreateDTO<Invoice>): Promise<Invoice> {
   const invoiceRef = doc(collection(db, `businesses/${businessId}/invoices`));
   const counterRef = doc(db, `businesses/${businessId}/counters`, 'invoice');
+  const clientRef = doc(db, `businesses/${businessId}/clients`, data.clientId).withConverter(converters.client);
 
   const currentYear = new Date().getFullYear();
 
   return await runTransaction(db, async (transaction) => {
+    // 1. Reads
     const counterDoc = await transaction.get(counterRef);
+    const clientDoc = await transaction.get(clientRef);
+    
+    // 2. Logic
     let nextNumber = 1;
-
     if (counterDoc.exists()) {
       const c = counterDoc.data() as InvoiceCounter;
       if (c.currentYear === currentYear) {
@@ -307,12 +311,24 @@ export async function createInvoice(businessId: string, data: CreateDTO<Invoice>
       updatedAt: serverTimestamp(),
     };
 
+    // 3. Writes
     transaction.set(invoiceRef, newInvoice);
     transaction.set(counterRef, {
       businessId,
       currentYear,
       lastNumber: nextNumber,
     });
+
+    // Update client totals if NOT a draft or cancelled
+    if (data.status !== 'draft' && data.status !== 'cancelled' && clientDoc.exists()) {
+      const client = clientDoc.data();
+      const ttc = data.totals.totalTTC;
+      transaction.update(clientRef, {
+        totalInvoiced: (client.totalInvoiced || 0) + ttc,
+        balance: (client.balance || 0) + ttc,
+        updatedAt: serverTimestamp()
+      });
+    }
 
     return newInvoice as unknown as Invoice;
   });
@@ -368,12 +384,76 @@ export async function updateInvoice(businessId: string, invoiceId: string, data:
 /**
  * Specifically updates invoice status.
  */
-export async function updateInvoiceStatus(businessId: string, invoiceId: string, status: InvoiceStatus): Promise<void> {
-  const ref = doc(db, `businesses/${businessId}/invoices`, invoiceId);
-  await updateDoc(ref, {
-    status,
-    updatedAt: serverTimestamp(),
+export async function updateInvoiceStatus(businessId: string, invoiceId: string, newStatus: InvoiceStatus): Promise<void> {
+  const invoiceRef = doc(db, `businesses/${businessId}/invoices`, invoiceId).withConverter(converters.invoice);
+  
+  await runTransaction(db, async (transaction) => {
+    const invoiceSnap = await transaction.get(invoiceRef);
+    if (!invoiceSnap.exists()) return;
+    
+    const invoice = invoiceSnap.data();
+    const oldStatus = invoice.status;
+    if (oldStatus === newStatus) return;
+
+    const updates: any = {
+      status: newStatus,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (newStatus === 'sent' && !invoice.sentAt) {
+      updates.sentAt = serverTimestamp();
+    }
+
+    transaction.update(invoiceRef, updates);
+
+    // Sync client totals if needed
+    if (invoice.clientId) {
+      const clientRef = doc(db, `businesses/${businessId}/clients`, invoice.clientId).withConverter(converters.client);
+      const clientSnap = await transaction.get(clientRef);
+      
+      if (clientSnap.exists()) {
+        const client = clientSnap.data();
+        const ttc = invoice.totals.totalTTC;
+        const paidAmount = invoice.payments?.reduce((s, p) => s + p.amount, 0) || 0;
+        const remaining = ttc - paidAmount;
+
+        let totalInvoicedDelta = 0;
+        let balanceDelta = 0;
+
+        // Transition logic
+        // 1. Moving FROM draft TO active
+        if (oldStatus === 'draft' && (newStatus !== 'draft' && newStatus !== 'cancelled')) {
+          totalInvoicedDelta = ttc;
+          balanceDelta = remaining;
+        }
+        // 2. Moving FROM active TO cancelled
+        else if ((oldStatus !== 'draft' && oldStatus !== 'cancelled') && newStatus === 'cancelled') {
+          totalInvoicedDelta = -ttc;
+          balanceDelta = -remaining;
+        }
+        // 3. Moving FROM cancelled TO active
+        else if (oldStatus === 'cancelled' && (newStatus !== 'draft' && newStatus !== 'cancelled')) {
+          totalInvoicedDelta = ttc;
+          balanceDelta = remaining;
+        }
+
+        if (totalInvoicedDelta !== 0 || balanceDelta !== 0) {
+          transaction.update(clientRef, {
+            totalInvoiced: (client.totalInvoiced || 0) + totalInvoicedDelta,
+            balance: (client.balance || 0) + balanceDelta,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+    }
   });
+}
+
+/**
+ * Convenience function to mark invoice as sent.
+ */
+export async function markInvoiceAsSent(businessId: string, invoiceId: string): Promise<void> {
+  return updateInvoiceStatus(businessId, invoiceId, 'sent');
 }
 
 /**
@@ -437,10 +517,12 @@ export async function addPayment(businessId: string, invoiceId: string, paymentD
  * Cancels an invoice.
  */
 export async function cancelInvoice(businessId: string, invoiceId: string, reason: string): Promise<void> {
+  // Use updateInvoiceStatus to ensure client totals are synced
+  // and add the reason in a separate step or modify status update to accept more fields
   const ref = doc(db, `businesses/${businessId}/invoices`, invoiceId);
+  await updateInvoiceStatus(businessId, invoiceId, 'cancelled');
   await updateDoc(ref, {
-    status: 'cancelled',
-    internalNotes: reason, // simplified tracking
+    internalNotes: reason,
     cancelledAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

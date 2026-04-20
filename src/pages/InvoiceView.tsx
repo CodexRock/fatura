@@ -4,7 +4,7 @@ import {
   ArrowLeft, Download, CreditCard, Share2, Copy, 
   Trash2, XCircle, CheckCircle, Clock, FileText, AlertCircle 
 } from 'lucide-react';
-import { getInvoice, getClient, addPayment, updateInvoiceStatus, cancelInvoice } from '../lib/firestore';
+import { getInvoice, getClient, addPayment, updateInvoiceStatus, cancelInvoice, markInvoiceAsSent } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { INVOICE_STATUS_LABELS } from '../types';
 import type { Invoice, Client, PaymentMethod } from '../types';
@@ -121,6 +121,18 @@ export default function InvoiceView() {
     }
   };
 
+  const handleMarkAsSent = async () => {
+    if (!business || !invoice) return;
+    try {
+      await markInvoiceAsSent(business.id, invoice.id);
+      const updated = await getInvoice(business.id, invoice.id);
+      setInvoice(updated);
+    } catch (error) {
+      console.error(error);
+      alert("Erreur lors de la mise à jour du statut.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -151,7 +163,7 @@ export default function InvoiceView() {
   const paidPercentage = Math.min(100, Math.round((totalPaid / invoice.totals.totalTTC) * 100)) || 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 pb-32 md:pb-12 text-slate-900">
       {/* Top Bar Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
@@ -204,6 +216,16 @@ export default function InvoiceView() {
             <Copy className="h-4 w-4" />
             Dupliquer
           </button>
+
+          {invoice.status === 'validated' && (
+            <button
+              onClick={handleMarkAsSent}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 text-indigo-700 px-4 py-2 text-sm font-semibold hover:bg-indigo-100 transition-colors"
+            >
+              <Send className="h-4 w-4" />
+              Marquer comme envoyé
+            </button>
+          )}
 
           {invoice.status !== 'cancelled' && (
             <button
@@ -264,28 +286,30 @@ export default function InvoiceView() {
               </div>
             </div>
 
-            <table className="w-full text-left text-sm mb-8">
-              <thead>
-                <tr className="border-y border-gray-200 bg-gray-50">
-                  <th className="py-3 px-4 font-semibold text-gray-900 rounded-tl-lg">Description</th>
-                  <th className="py-3 px-4 font-semibold text-gray-900 text-right">Qté</th>
-                  <th className="py-3 px-4 font-semibold text-gray-900 text-right">Prix HT</th>
-                  <th className="py-3 px-4 font-semibold text-gray-900 text-right">TVA</th>
-                  <th className="py-3 px-4 font-semibold text-gray-900 text-right rounded-tr-lg">Total HT</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {invoice.lines.map((line, idx) => (
-                  <tr key={idx}>
-                    <td className="py-3 px-4 text-gray-900 whitespace-pre-wrap">{line.description}</td>
-                    <td className="py-3 px-4 text-gray-600 text-right">{line.quantity}</td>
-                    <td className="py-3 px-4 text-gray-600 text-right">{formatMAD(line.unitPrice)}</td>
-                    <td className="py-3 px-4 text-gray-600 text-right">{line.tvaRate}%</td>
-                    <td className="py-3 px-4 text-gray-900 text-right font-medium">{formatMAD(line.totalHT)}</td>
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <table className="min-w-full text-left text-sm mb-8">
+                <thead>
+                  <tr className="border-y border-gray-200 bg-gray-50">
+                    <th className="py-3 px-4 font-semibold text-gray-900 rounded-tl-lg">Description</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right">Qté</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right">Prix HT</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right">TVA</th>
+                    <th className="py-3 px-4 font-semibold text-gray-900 text-right rounded-tr-lg">Total HT</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {invoice.lines.map((line, idx) => (
+                    <tr key={idx}>
+                      <td className="py-3 px-4 text-gray-900 min-w-[200px]">{line.description}</td>
+                      <td className="py-3 px-4 text-gray-600 text-right">{line.quantity}</td>
+                      <td className="py-3 px-4 text-gray-600 text-right">{formatMAD(line.unitPrice)}</td>
+                      <td className="py-3 px-4 text-gray-600 text-right">{line.tvaRate}%</td>
+                      <td className="py-3 px-4 text-gray-900 text-right font-medium">{formatMAD(line.totalHT)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <div className="flex justify-end border-t border-gray-200 pt-6">
               <div className="w-72 space-y-3">

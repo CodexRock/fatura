@@ -33,6 +33,7 @@ interface State {
   type: InvoiceType;
   issueDate: string; // YYYY-MM-DD
   dueDate: string;   // YYYY-MM-DD
+  paymentTermsDays: number;
   clientId: string | null;
   selectedClient: Client | null;
   isSearchingClient: boolean;
@@ -44,6 +45,7 @@ interface State {
 type Action = 
   | { type: 'SET_FIELD'; field: keyof State; value: any }
   | { type: 'SET_CLIENT'; client: Client | null }
+  | { type: 'SET_PAYMENT_TERMS'; days: number }
   | { type: 'ADD_LINE' }
   | { type: 'REMOVE_LINE'; id: string }
   | { type: 'UPDATE_LINE'; id: string; field: keyof LineState; value: any }
@@ -52,8 +54,8 @@ type Action =
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 const getTodayStr = () => new Date().toISOString().split('T')[0];
-const getFutureDateStr = (days: number) => {
-  const d = new Date();
+const getFutureDateStr = (baseDate: string, days: number) => {
+  const d = new Date(baseDate);
   d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
 };
@@ -72,16 +74,36 @@ const createEmptyLine = (): LineState => ({
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'SET_FIELD':
+      if (action.field === 'issueDate') {
+        return { 
+          ...state, 
+          issueDate: action.value,
+          dueDate: getFutureDateStr(action.value, state.paymentTermsDays)
+        };
+      }
+      if (action.field === 'dueDate') {
+        // If due date is changed manually, we don't necessarily update paymentTermsDays to match exactly 
+        // to avoid complexity, but we can if we want to. For now, just set it.
+        return { ...state, dueDate: action.value };
+      }
       return { ...state, [action.field]: action.value };
     
     case 'SET_CLIENT':
       // Auto adjust due date based on client terms if available
-      const terms = action.client?.paymentTermsDays || 30;
+      const terms = action.client?.paymentTermsDays ?? 30;
       return { 
         ...state, 
         clientId: action.client?.id || null, 
         selectedClient: action.client,
-        dueDate: getFutureDateStr(terms)
+        paymentTermsDays: terms,
+        dueDate: getFutureDateStr(state.issueDate, terms)
+      };
+
+    case 'SET_PAYMENT_TERMS':
+      return {
+        ...state,
+        paymentTermsDays: action.days,
+        dueDate: getFutureDateStr(state.issueDate, action.days)
       };
 
     case 'ADD_LINE':
@@ -138,17 +160,22 @@ export default function InvoiceCreate() {
   const { clients } = useClients();
   const { products } = useProducts();
 
-  const [state, dispatch] = useReducer(reducer, null, () => ({
-    type: 'facture' as InvoiceType,
-    issueDate: getTodayStr(),
-    dueDate: getFutureDateStr(business?.defaultPaymentTermsDays || 30),
-    clientId: null,
-    selectedClient: null,
-    isSearchingClient: false,
-    lines: [createEmptyLine()],
-    notes: '',
-    internalNotes: '',
-  }));
+  const [state, dispatch] = useReducer(reducer, null, () => {
+    const today = getTodayStr();
+    const defaultTerms = business?.defaultPaymentTermsDays ?? 30;
+    return {
+      type: 'facture' as InvoiceType,
+      issueDate: today,
+      dueDate: getFutureDateStr(today, defaultTerms),
+      paymentTermsDays: defaultTerms,
+      clientId: null,
+      selectedClient: null,
+      isSearchingClient: false,
+      lines: [createEmptyLine()],
+      notes: '',
+      internalNotes: '',
+    };
+  });
 
   const [submitting, setSubmitting] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
@@ -342,7 +369,7 @@ export default function InvoiceCreate() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Date d'émission</label>
                 <input 
@@ -351,6 +378,21 @@ export default function InvoiceCreate() {
                   onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'issueDate', value: e.target.value })}
                   className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary px-4 py-2 border"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Conditions de paiement</label>
+                <select
+                  value={state.paymentTermsDays}
+                  onChange={(e) => dispatch({ type: 'SET_PAYMENT_TERMS', days: parseInt(e.target.value) })}
+                  className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary px-4 py-2 border h-[42px]"
+                >
+                  <option value={0}>Comptant (0j)</option>
+                  <option value={15}>15 jours</option>
+                  <option value={30}>30 jours</option>
+                  <option value={45}>45 jours</option>
+                  <option value={60}>60 jours</option>
+                  <option value={90}>90 jours</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Date d'échéance</label>
@@ -461,26 +503,36 @@ export default function InvoiceCreate() {
                       <label className="block text-xs font-medium text-slate-500 mb-1">Désignation</label>
                       <input
                         type="text"
-                        placeholder="Rechercher un produit ou taper le détail..."
+                        placeholder="Qu'avez vous vendu ?"
                         value={line.description}
+                        onFocus={() => setProductSearch({ id: line.id, term: line.description || '' })}
                         onChange={(e) => {
                           dispatch({ type: 'UPDATE_LINE', id: line.id, field: 'description', value: e.target.value });
                           setProductSearch({ id: line.id, term: e.target.value });
                         }}
-                        onBlur={() => setTimeout(() => setProductSearch(null), 200)}
+                        onBlur={() => setTimeout(() => setProductSearch(null), 250)}
                         className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary px-3 py-2 text-sm border font-medium text-slate-900"
                       />
                       {/* Product Autocomplete */}
-                      {productSearch?.id === line.id && productSearch.term && (
+                      {productSearch?.id === line.id && (
                         <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                          {products.filter(p => p.label.toLowerCase().includes(productSearch.term.toLowerCase())).map(prod => (
+                          {products
+                            .filter(p => !productSearch.term || p.label.toLowerCase().includes(productSearch.term.toLowerCase()))
+                            .slice(0, 5)
+                            .map(prod => (
                             <button
                               key={prod.id}
-                              onMouseDown={() => dispatch({ type: 'APPLY_PRODUCT', id: line.id, product: prod })}
-                              className="w-full text-left px-4 py-2 hover:bg-slate-50 border-b border-slate-100 flex justify-between items-center"
+                              onMouseDown={() => {
+                                dispatch({ type: 'APPLY_PRODUCT', id: line.id, product: prod });
+                                setProductSearch(null);
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 flex justify-between items-center group"
                             >
-                              <span className="font-medium text-sm text-slate-900">{prod.label}</span>
-                              <span className="text-xs text-slate-500">{formatMAD(prod.unitPrice)} TTC</span>
+                              <div className="flex flex-col">
+                                <span className="font-medium text-sm text-slate-900 group-hover:text-primary transition-colors">{prod.label}</span>
+                                {prod.category && <span className="text-[10px] text-slate-400 uppercase tracking-tight">{prod.category}</span>}
+                              </div>
+                              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded">{formatMAD(prod.unitPrice)}</span>
                             </button>
                           ))}
                         </div>
