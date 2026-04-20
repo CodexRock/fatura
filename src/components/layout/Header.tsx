@@ -82,13 +82,13 @@ export default function Header() {
           <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-danger-500 rounded-full ring-2 ring-white" />
         </button>
 
-        {/* New Invoice CTA */}
+        {/* New Invoice CTA — desktop only */}
         <button
           onClick={() => navigate('/invoices/new')}
-          className="flex items-center gap-2 bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary-800 transition-all shadow-btn active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+          className="hidden sm:flex items-center gap-2 bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary-800 transition-all shadow-btn active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nouvelle facture</span>
+          Nouvelle facture
         </button>
       </div>
     </header>
