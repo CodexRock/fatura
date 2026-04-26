@@ -25,7 +25,8 @@ export default function Dashboard() {
     stats, 
     chartData, 
     recentInvoices, 
-    topClients, 
+    topClients,
+    whatsappStats,
     loading 
   } = useDashboard();
 
@@ -160,6 +161,33 @@ export default function Dashboard() {
         </button>
 
       </div>
+
+      {whatsappStats?.activeLink && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
+          <h2 className="font-bold text-lg text-[#25D366] mb-6 flex items-center gap-2">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 0C5.385 0 0 5.388 0 12.035c0 2.124.553 4.195 1.604 6.01L.067 23.6l5.702-1.495c1.745.952 3.708 1.455 5.728 1.455h.004c6.645 0 12.03-5.388 12.03-12.035C23.531 5.388 18.146 0 12.031 0zm7.166 17.182c-.302.85-1.488 1.6-2.11 1.696-.583.09-1.341.259-4.27-1.002-3.708-1.597-6.143-5.46-6.326-5.713-.183-.253-1.508-2.008-1.508-3.831 0-1.823.947-2.724 1.282-3.084.335-.36.732-.45 1.005-.45.273 0 .546-.004.791.008.256.012.601-.097.94.72.348.835 1.157 2.825 1.258 3.025.101.2.164.433.028.704-.135.27-.203.435-.406.674-.202.24-.423.52-.612.72-.203.216-.418.452-.18.86.237.407 1.053 1.74 2.257 2.812 1.558 1.387 2.868 1.823 3.275 2.012.407.19.645.158.887-.091.242-.25 1.051-1.226 1.332-1.646.281-.42.562-.35.938-.208.375.142 2.378 1.121 2.783 1.321.405.2.674.3.774.467.1.168.1.976-.202 1.825z"/></svg>
+            Activité WhatsApp (30 jours)
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+             <div className="p-4 bg-slate-50 rounded-2xl flex flex-col justify-center">
+                <div className="text-sm font-bold text-slate-500 mb-1">Sessions Bot</div>
+                <div className="text-2xl font-black text-slate-800">{whatsappStats.totalSessions}</div>
+             </div>
+             <div className="p-4 bg-slate-50 rounded-2xl flex flex-col justify-center">
+                <div className="text-sm font-bold text-slate-500 mb-1">Factures Créées</div>
+                <div className="text-2xl font-black text-[#1B4965]">{whatsappStats.invoicesCreated}</div>
+             </div>
+             <div className="p-4 bg-slate-50 rounded-2xl flex flex-col justify-center">
+                <div className="text-sm font-bold text-slate-500 mb-1">PDF Envoyés</div>
+                <div className="text-2xl font-black text-[#2D6A4F]">{whatsappStats.pdfSent}</div>
+             </div>
+             <div className="p-4 bg-slate-50 rounded-2xl flex flex-col justify-center">
+                <div className="text-sm font-bold text-slate-500 mb-1">Taux de Conversion</div>
+                <div className="text-2xl font-black text-[#F4A261]">{whatsappStats.successRate}%</div>
+             </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         

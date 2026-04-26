@@ -48,6 +48,9 @@ export interface Business {
   defaultCurrency: 'MAD';
   bankDetails?: BankDetails;
   subscription: Subscription;
+  whatsappEnabled?: boolean;
+  whatsappWaId?: string | null;
+  whatsappPreferences?: WhatsAppPreferences;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -200,3 +203,78 @@ export const LEGAL_FORM_LABELS: Record<LegalForm, { fr: string; ar: string }> = 
 
 // Utility types
 export type Centimes = number;
+
+// --- WhatsApp Bot Types ---
+
+export type WhatsAppSessionState = 
+  | 'idle' | 'parsing_intent' | 'awaiting_client' | 'creating_client' 
+  | 'awaiting_product' | 'creating_product' | 'awaiting_details' 
+  | 'confirming' | 'generating' | 'delivered' | 'error';
+
+export interface WhatsAppSession {
+  id: string;
+  businessId: string;
+  waId: string;
+  state: WhatsAppSessionState;
+  intentData: {
+    clientName?: string | null;
+    productLabel?: string | null;
+    quantity?: number | null;
+    unitPrice?: number | null;
+    tvaRate?: TvaRate | null;
+    priceType?: 'HT' | 'TTC';
+    notes?: string | null;
+    dueDate?: string | null;
+  };
+  resolvedData: {
+    clientId?: string | null;
+    productId?: string | null;
+    lines?: InvoiceLine[];
+    totals?: {
+      totalHT: number;
+      tvaBreakdown: { rate: number; base: number; amount: number }[];
+      totalTVA: number;
+      totalTTC: number;
+    };
+  };
+  pendingField: string | null;
+  messageHistory: { role: 'user' | 'bot'; content: string; timestamp: Timestamp }[];
+  invoiceId: string | null;
+  errorCount?: number;
+  expiresAt: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface WhatsAppLink {
+  id: string; // usually waId
+  waId: string;
+  businessId: string;
+  ownerId: string;
+  isActive: boolean;
+  linkedAt: Timestamp;
+  lastMessageAt: Timestamp;
+}
+
+export interface WhatsAppPreferences {
+  defaultTvaRate: TvaRate;
+  autoConfirm: boolean;
+  language: 'fr' | 'ar';
+  notifyOnGeneration: boolean;
+}
+
+export interface NlpIntent {
+  intent: 'create_invoice' | 'check_status' | 'cancel' | 'help' | 'unknown';
+  confidence: number;
+  entities: {
+    clientName: string | null;
+    productLabel: string | null;
+    quantity: number | null;
+    unitPrice: number | null;
+    currency: 'MAD';
+    tvaOverride: TvaRate | null;
+    priceType: 'HT' | 'TTC';
+    dueDate: string | null;
+    notes: string | null;
+  };
+}

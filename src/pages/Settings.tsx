@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import {
   Save,
   Building2,
@@ -22,6 +23,10 @@ import {
   Eye,
   Palette,
   X,
+  MessageCircle,
+  Phone,
+  Unlink,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { updateBusiness, listInvoices } from '../lib/firestore';
@@ -29,6 +34,7 @@ import { storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { generateUBL, downloadUBL } from '../lib/ubl';
 import { formatMAD } from '../lib/tva';
+import { functions } from '../lib/firebase';
 import type { TvaRegime, LegalForm, TvaRate, Business } from '../types';
 
 // =============================================================================
@@ -42,12 +48,13 @@ const MOROCCAN_CITIES = [
 
 const PRESET_COLORS = ['#1B4965', '#F4A261', '#2A9D8F', '#E76F51', '#264653', '#8AB17D', '#6366F1', '#EC4899'];
 
-type SettingsTab = 'entreprise' | 'facturation' | 'banque' | 'abonnement' | 'dgi';
+type SettingsTab = 'entreprise' | 'facturation' | 'banque' | 'whatsapp' | 'abonnement' | 'dgi';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'entreprise', label: 'Entreprise', icon: Building2 },
   { id: 'facturation', label: 'Facturation', icon: Receipt },
   { id: 'banque', label: 'Banque', icon: Landmark },
+  { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { id: 'abonnement', label: 'Abonnement', icon: Crown },
   { id: 'dgi', label: 'Conformité DGI', icon: Shield },
 ];
@@ -210,6 +217,9 @@ export default function Settings() {
           )}
           {activeTab === 'banque' && (
             <TabBanque business={business} loading={loading} onSave={saveBusiness} />
+          )}
+          {activeTab === 'whatsapp' && (
+            <TabWhatsApp business={business} showSuccess={showSuccess} showError={showError} />
           )}
           {activeTab === 'abonnement' && (
             <TabAbonnement business={business} />
@@ -988,6 +998,274 @@ function TabDGI({ business }: { business: Business }) {
   );
 }
 
+// =============================================================================
+// TAB 6: WHATSAPP BOT
+// =============================================================================
+
+function TabWhatsApp({
+  business,
+  showSuccess,
+  showError,
+}: {
+  business: Business;
+  showSuccess: (msg: string) => void;
+  showError: (msg: string) => void;
+}) {
+  const linkedPhone = (business as any).whatsappLinkedPhone || '';
+  const prefs = (business as any).whatsappPreferences || {};
+  const isLinked = !!linkedPhone;
+
+  const [phoneInput, setPhoneInput] = useState('');
+  const [defaultTvaRate, setDefaultTvaRate] = useState<TvaRate>(prefs.defaultTvaRate || 20);
+  const [autoConfirm, setAutoConfirm] = useState(prefs.autoConfirm || false);
+  const [language, setLanguage] = useState<'fr' | 'ar'>(prefs.language || 'fr');
+  const [notifyOnGeneration, setNotifyOnGeneration] = useState(prefs.notifyOnGeneration !== false);
+  const [linking, setLinking] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+
+  const formatPhoneDisplay = (waId: string) => {
+    if (!waId) return '';
+    if (waId.startsWith('212') && waId.length >= 12) {
+      return `+${waId.slice(0, 3)} ${waId.slice(3, 4)} ${waId.slice(4, 6)} ${waId.slice(6, 8)} ${waId.slice(8, 10)} ${waId.slice(10)}`;
+    }
+    return `+${waId}`;
+  };
+
+  const handleLink = async () => {
+    if (!phoneInput.trim()) {
+      showError('Veuillez entrer un numéro de téléphone.');
+      return;
+    }
+    setLinking(true);
+    try {
+      const linkFn = httpsCallable(functions, 'linkWhatsApp');
+      await linkFn({
+        phoneNumber: phoneInput,
+        preferences: { defaultTvaRate, autoConfirm, language, notifyOnGeneration },
+      });
+      showSuccess('WhatsApp lié avec succès ! Un message de bienvenue a été envoyé.');
+      // Force reload to reflect changes
+      window.location.reload();
+    } catch (err: any) {
+      const msg = err?.message || 'Erreur lors de la liaison WhatsApp.';
+      showError(msg);
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleUnlink = async () => {
+    setUnlinking(true);
+    try {
+      const unlinkFn = httpsCallable(functions, 'unlinkWhatsApp');
+      await unlinkFn({});
+      showSuccess('WhatsApp délié avec succès.');
+      window.location.reload();
+    } catch (err: any) {
+      showError(err?.message || 'Erreur lors de la suppression du lien.');
+    } finally {
+      setUnlinking(false);
+      setShowUnlinkConfirm(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 pb-48 lg:pb-6">
+      {/* Connection Status */}
+      <div className={sectionCardClass}>
+        <SectionHeader
+          icon={MessageCircle}
+          title="WhatsApp Bot"
+          description="Créez des factures par message WhatsApp"
+        />
+        <div className="p-6">
+          {isLinked ? (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50/50">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                  <MessageCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-800">Connecté</span>
+                    <span className="px-2 py-0.5 bg-emerald-200 text-emerald-800 text-[10px] font-bold rounded-full">Actif</span>
+                  </div>
+                  <p className="text-sm text-emerald-700 mt-0.5 font-mono">
+                    {formatPhoneDisplay(linkedPhone)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                {showUnlinkConfirm ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleUnlink}
+                      disabled={unlinking}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {unlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                      Confirmer
+                    </button>
+                    <button
+                      onClick={() => setShowUnlinkConfirm(false)}
+                      className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowUnlinkConfirm(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl font-medium hover:bg-red-100 transition-colors"
+                  >
+                    <Unlink className="w-4 h-4" />
+                    Délier
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 p-5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-6 h-6 text-slate-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-700">Aucun numéro lié</p>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Liez votre WhatsApp pour créer des factures par message.
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Numéro WhatsApp (format international)</label>
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">+</span>
+                    <input
+                      type="text"
+                      value={phoneInput}
+                      onChange={e => setPhoneInput(e.target.value.replace(/[^\d]/g, '').slice(0, 15))}
+                      className={inputClass + ' pl-7 font-mono'}
+                      placeholder="212 6 00 00 00 00"
+                    />
+                  </div>
+                  <button
+                    onClick={handleLink}
+                    disabled={linking || !phoneInput.trim()}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-[#25D366] text-white rounded-xl font-medium hover:bg-[#1da851] transition-colors disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {linking ? <Loader2 className="w-4 h-4 animate-spin" /> : <LinkIcon className="w-4 h-4" />}
+                    Lier WhatsApp
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Entrez le numéro avec l'indicatif pays (ex: 212 pour le Maroc, sans le 0).
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Preferences */}
+      <div className={sectionCardClass}>
+        <SectionHeader
+          icon={Receipt}
+          title="Préférences Bot"
+          description="Paramètres par défaut pour les factures créées via WhatsApp"
+        />
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className={labelClass}>TVA par défaut</label>
+              <select
+                value={defaultTvaRate}
+                onChange={e => setDefaultTvaRate(parseInt(e.target.value) as TvaRate)}
+                className={inputClass}
+                disabled={!isLinked}
+              >
+                <option value={20}>20% — Standard</option>
+                <option value={14}>14% — Réduit</option>
+                <option value={10}>10% — Réduit</option>
+                <option value={7}>7% — Super réduit</option>
+                <option value={0}>0% — Exonéré</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Langue des messages</label>
+              <select
+                value={language}
+                onChange={e => setLanguage(e.target.value as 'fr' | 'ar')}
+                className={inputClass}
+                disabled={!isLinked}
+              >
+                <option value="fr">Français</option>
+                <option value="ar">العربية (Arabe)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={autoConfirm}
+                onChange={e => setAutoConfirm(e.target.checked)}
+                disabled={!isLinked}
+                className="w-5 h-5 rounded-lg border-2 border-slate-300 text-[#1B4965] focus:ring-[#5FA8D3] cursor-pointer"
+              />
+              <div>
+                <p className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">Confirmation automatique</p>
+                <p className="text-xs text-slate-500">Générer la facture sans demander confirmation (attention !)</p>
+              </div>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={notifyOnGeneration}
+                onChange={e => setNotifyOnGeneration(e.target.checked)}
+                disabled={!isLinked}
+                className="w-5 h-5 rounded-lg border-2 border-slate-300 text-[#1B4965] focus:ring-[#5FA8D3] cursor-pointer"
+              />
+              <div>
+                <p className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">Notifications PDF</p>
+                <p className="text-xs text-slate-500">Recevoir le PDF de la facture directement sur WhatsApp</p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* How it Works */}
+      <div className={sectionCardClass}>
+        <SectionHeader
+          icon={Zap}
+          title="Comment ça marche ?"
+        />
+        <div className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { step: '1', title: 'Envoyez un message', desc: '"Facture pour Ahmed, consulting 5000dh"' },
+              { step: '2', title: 'Vérifiez et confirmez', desc: 'Le bot affiche un récapitulatif avec les montants' },
+              { step: '3', title: 'Recevez le PDF', desc: 'La facture est générée et envoyée en quelques secondes' },
+            ].map((item) => (
+              <div key={item.step} className="text-center p-4 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="w-8 h-8 rounded-full bg-[#1B4965] text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">
+                  {item.step}
+                </div>
+                <p className="font-semibold text-slate-800 text-sm">{item.title}</p>
+                <p className="text-xs text-slate-500 mt-1">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function ComplianceItem({ checked, label, detail }: { checked: boolean; label: string; detail: string }) {
   return (
     <div className={`flex items-center gap-3 p-3.5 rounded-xl border transition-colors ${

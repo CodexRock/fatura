@@ -44,7 +44,7 @@ function formatDate(ts: admin.firestore.Timestamp | {_seconds: number}): string 
 }
 
 /** Log an activity entry */
-async function logActivity(
+export async function logActivity(
   businessId: string,
   userId: string,
   action: string,
@@ -695,3 +695,320 @@ export const scheduledOverdueCheck = fn.pubsub
       functions.logger.error("scheduledOverdueCheck failed", {error: err});
     }
   });
+
+// =============================================================================
+// 7. cleanupWhatsAppSessions — Every 15 minutes
+// =============================================================================
+
+export const cleanupWhatsAppSessions = fn.pubsub
+  .schedule("*/15 * * * *") // Every 15 minutes
+  .timeZone("Africa/Casablanca")
+  .onRun(async () => {
+    const now = admin.firestore.Timestamp.now();
+
+    functions.logger.info("Running WhatsApp session cleanup", {
+      timestamp: now.toDate().toISOString(),
+    });
+
+    try {
+      const businessesSnap = await db.collection("businesses").get();
+      let totalCleaned = 0;
+
+      for (const businessDoc of businessesSnap.docs) {
+        const businessId = businessDoc.id;
+
+        // Find sessions where expiresAt < now and state is not already 'delivered'
+        const expiredSnap = await db
+          .collection("businesses")
+          .doc(businessId)
+          .collection("whatsappSessions")
+          .where("expiresAt", "<", now)
+          .limit(100) // Batch limit per business
+          .get();
+
+        if (expiredSnap.empty) continue;
+
+        const batch = db.batch();
+        let count = 0;
+
+        for (const sessionDoc of expiredSnap.docs) {
+          const sessionData = sessionDoc.data();
+          // Only clean sessions that are not in a terminal state
+          if (sessionData.state !== 'delivered') {
+            batch.update(sessionDoc.ref, {
+              state: "idle",
+              intentData: {},
+              resolvedData: {},
+              pendingField: null,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+          }
+        }
+
+        if (count > 0) {
+          await batch.commit();
+          totalCleaned += count;
+          functions.logger.info(`Cleaned ${count} expired sessions`, { businessId });
+        }
+      }
+
+      functions.logger.info("WhatsApp session cleanup complete", { totalCleaned });
+    } catch (err) {
+      functions.logger.error("cleanupWhatsAppSessions failed", { error: err });
+    }
+  });
+
+// =============================================================================
+// 8. WhatsApp Webhook
+// =============================================================================
+
+export { whatsappWebhook } from "./whatsapp/webhook";
+
+// =============================================================================
+// 9. WhatsApp Link / Unlink — Callable Functions
+// =============================================================================
+
+/**
+ * linkWhatsApp — Links a WhatsApp phone number to the current business.
+ * Creates a whatsappLinks document and stores preferences on the business.
+ */
+export const linkWhatsApp = fn.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Vous devez être connecté.");
+  }
+
+  const { phoneNumber, preferences } = data as {
+    phoneNumber: string;
+    preferences?: {
+      defaultTvaRate?: number;
+      autoConfirm?: boolean;
+      language?: "fr" | "ar";
+      notifyOnGeneration?: boolean;
+    };
+  };
+
+  if (!phoneNumber || typeof phoneNumber !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "Numéro de téléphone requis.");
+  }
+
+  // Normalize: strip all non-digits, ensure starts with country code
+  const waId = phoneNumber.replace(/\D/g, "");
+  if (waId.length < 10 || waId.length > 15) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Numéro de téléphone invalide. Utilisez le format international (ex: 212600000000)."
+    );
+  }
+
+  // Get the user's business
+  const uid = context.auth.uid;
+  const businessSnap = await db.collection("businesses")
+    .where("ownerId", "==", uid)
+    .limit(1)
+    .get();
+
+  if (businessSnap.empty) {
+    throw new functions.https.HttpsError("not-found", "Entreprise non trouvée.");
+  }
+
+  const businessDoc = businessSnap.docs[0];
+  const businessId = businessDoc.id;
+
+  // Check if this phone is already linked to another business
+  const existingLink = await db.collection("whatsappLinks").doc(waId).get();
+  if (existingLink.exists) {
+    const linkData = existingLink.data();
+    if (linkData?.isActive && linkData?.businessId !== businessId) {
+      throw new functions.https.HttpsError(
+        "already-exists",
+        "Ce numéro est déjà lié à une autre entreprise."
+      );
+    }
+  }
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  // Create or update the whatsappLinks document
+  await db.collection("whatsappLinks").doc(waId).set({
+    waId,
+    businessId,
+    ownerId: uid,
+    isActive: true,
+    linkedAt: now,
+    lastMessageAt: now,
+  });
+
+  await logActivity(businessId, uid, "WhatsApp: compte lié", "whatsappLinks", waId, { waId, preferences });
+
+  // Store preferences on the business document
+  const whatsappPrefs = {
+    defaultTvaRate: preferences?.defaultTvaRate ?? 20,
+    autoConfirm: preferences?.autoConfirm ?? false,
+    language: preferences?.language ?? "fr",
+    notifyOnGeneration: preferences?.notifyOnGeneration ?? true,
+  };
+
+  await businessDoc.ref.update({
+    whatsappLinkedPhone: waId,
+    whatsappPreferences: whatsappPrefs,
+    updatedAt: now,
+  });
+
+  // Send welcome message (fire-and-forget)
+  try {
+    const { sendWelcomeMessage } = await import("./whatsapp/messenger");
+    await sendWelcomeMessage(waId);
+  } catch (e) {
+    functions.logger.warn("Failed to send WhatsApp welcome message", { error: e });
+  }
+
+  functions.logger.info("WhatsApp linked successfully", { waId, businessId });
+
+  return {
+    success: true,
+    waId,
+    message: "WhatsApp lié avec succès !",
+  };
+});
+
+/**
+ * unlinkWhatsApp — Unlinks a WhatsApp phone number from the current business.
+ */
+export const unlinkWhatsApp = fn.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Vous devez être connecté.");
+  }
+
+  const uid = context.auth.uid;
+
+  // Get the user's business
+  const businessSnap = await db.collection("businesses")
+    .where("ownerId", "==", uid)
+    .limit(1)
+    .get();
+
+  if (businessSnap.empty) {
+    throw new functions.https.HttpsError("not-found", "Entreprise non trouvée.");
+  }
+
+  const businessDoc = businessSnap.docs[0];
+  const businessData = businessDoc.data();
+  const waId = businessData?.whatsappLinkedPhone;
+
+  if (!waId) {
+    throw new functions.https.HttpsError("not-found", "Aucun numéro WhatsApp lié.");
+  }
+
+  // Deactivate the whatsappLinks document
+  const linkRef = db.collection("whatsappLinks").doc(waId);
+  const linkDoc = await linkRef.get();
+  if (linkDoc.exists) {
+    await linkRef.update({
+      isActive: false,
+      deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Remove WhatsApp fields from business
+  await businessDoc.ref.update({
+    whatsappLinkedPhone: admin.firestore.FieldValue.delete(),
+    whatsappPreferences: admin.firestore.FieldValue.delete(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  functions.logger.info("WhatsApp unlinked", { waId, businessId: businessDoc.id });
+
+  return { success: true, message: "WhatsApp délié avec succès." };
+});
+
+// =============================================================================
+
+/**
+ * getWhatsAppStats — Retrieves usage statistics for the WhatsApp integration.
+ */
+export const getWhatsAppStats = fn.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Vous devez être connecté.");
+  }
+
+  const { businessId } = data as { businessId: string };
+  if (!businessId) {
+    throw new functions.https.HttpsError("invalid-argument", "businessId requis.");
+  }
+
+  // Verify ownership
+  const businessDoc = await db.collection("businesses").doc(businessId).get();
+  if (!businessDoc.exists || businessDoc.data()?.ownerId !== context.auth.uid) {
+    throw new functions.https.HttpsError("permission-denied", "Accès refusé.");
+  }
+
+  const now = Date.now();
+  const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(now - 30 * 24 * 60 * 60 * 1000);
+
+  // 1. Get recent activity for the last 30 days
+  const activitySnap = await db.collection(`businesses/${businessId}/activity`)
+    .where("createdAt", ">=", thirtyDaysAgo)
+    .orderBy("createdAt", "desc")
+    .get();
+
+  let totalSessions = 0;
+  let invoicesCreated = 0;
+  let errors = 0;
+  let pdfSent = 0;
+  const recentActivity: any[] = [];
+
+  activitySnap.forEach(doc => {
+    const act = doc.data();
+    if (typeof act.action === 'string' && act.action.startsWith('WhatsApp:')) {
+      if (recentActivity.length < 10) {
+        recentActivity.push({ id: doc.id, ...act });
+      }
+
+      switch (act.action) {
+        case 'WhatsApp: session démarrée':
+          totalSessions++;
+          break;
+        case 'WhatsApp: facture créée':
+          invoicesCreated++;
+          break;
+        case 'WhatsApp: erreur':
+          errors++;
+          break;
+        case 'WhatsApp: PDF envoyé':
+          pdfSent++;
+          break;
+      }
+    }
+  });
+
+  // 2. Check active link
+  const linkQuery = await db.collection("whatsappLinks")
+    .where("businessId", "==", businessId)
+    .where("isActive", "==", true)
+    .limit(1)
+    .get();
+  
+  let activeLink = null;
+  if (!linkQuery.empty) {
+    const linkDoc = linkQuery.docs[0].data();
+    activeLink = {
+      waId: linkDoc.waId,
+      linkedAt: linkDoc.linkedAt,
+      lastMessageAt: linkDoc.lastMessageAt
+    };
+  }
+
+  return {
+    success: true,
+    stats: {
+      totalSessions,
+      invoicesCreated,
+      errors,
+      pdfSent,
+      successRate: totalSessions > 0 ? Math.round((invoicesCreated / totalSessions) * 100) : 0,
+      activeLink,
+      recentActivity
+    }
+  };
+});

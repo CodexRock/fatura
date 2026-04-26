@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Invoice, Client } from '../types';
 
@@ -9,8 +10,10 @@ export function useDashboard() {
   
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [topClients, setTopClients] = useState<Client[]>([]);
+  const [whatsappStats, setWhatsappStats] = useState<any>(null);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [loadingClients, setLoadingClients] = useState(true);
+  const [loadingWhatsapp, setLoadingWhatsapp] = useState(true);
 
   // 1. Native Realtime Listener natively fetching structurally bounded invoice streams.
   // MVPs operate efficiently mapping locally rather than deploying complex composite indexes initially.
@@ -50,6 +53,29 @@ export function useDashboard() {
        setLoadingClients(false);
     });
     return () => unsub();
+  }, [business?.id]);
+
+  // 3. Fetch WhatsApp stats
+  useEffect(() => {
+    if (!business?.id) {
+       setWhatsappStats(null);
+       setLoadingWhatsapp(false);
+       return;
+    }
+    const fetchWhatsAppStats = async () => {
+      try {
+        const getStats = httpsCallable(functions, 'getWhatsAppStats');
+        const result = await getStats({ businessId: business.id });
+        if ((result.data as any).success) {
+          setWhatsappStats((result.data as any).stats);
+        }
+      } catch (err) {
+        console.error("Failed to fetch whatsapp stats", err);
+      } finally {
+        setLoadingWhatsapp(false);
+      }
+    };
+    fetchWhatsAppStats();
   }, [business?.id]);
 
   // Execute O(N) functional transformations bridging KPIs explicitly and safely.
@@ -142,6 +168,7 @@ export function useDashboard() {
   return {
      ...dashboardData,
      topClients,
-     loading: loadingInvoices || loadingClients
+     whatsappStats,
+     loading: loadingInvoices || loadingClients || loadingWhatsapp
   };
 }

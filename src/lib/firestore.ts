@@ -29,6 +29,8 @@ import type {
   ActivityLog,
   InvoiceStatus,
   InvoiceCounter,
+  WhatsAppLink,
+  WhatsAppSession,
 } from '../types';
 
 export class FaturaFirestoreError extends Error {
@@ -56,6 +58,8 @@ const converters = {
   invoice: createConverter<Invoice>(),
   counter: createConverter<InvoiceCounter>(),
   activityLog: createConverter<ActivityLog>(),
+  whatsappLink: createConverter<WhatsAppLink>(),
+  whatsappSession: createConverter<WhatsAppSession>(),
 };
 
 // ----------------------------------------------------------------------
@@ -617,5 +621,149 @@ export async function logActivity(
     entityId,
     details: details || {},
     timestamp: serverTimestamp(),
+  });
+}
+
+// ----------------------------------------------------------------------
+// WHATSAPP
+// ----------------------------------------------------------------------
+
+/**
+ * Creates a WhatsApp link for a business.
+ */
+export async function createWhatsAppLink(waId: string, businessId: string, ownerId: string): Promise<WhatsAppLink> {
+  const ref = doc(db, 'whatsappLinks', waId);
+  const newLink = {
+    id: waId,
+    waId,
+    businessId,
+    ownerId,
+    isActive: true,
+    linkedAt: serverTimestamp(),
+    lastMessageAt: serverTimestamp(),
+  };
+  await setDoc(ref, newLink);
+  return newLink as unknown as WhatsAppLink;
+}
+
+/**
+ * Gets a WhatsApp link by waId.
+ */
+export async function getWhatsAppLink(waId: string): Promise<WhatsAppLink | null> {
+  const ref = doc(db, 'whatsappLinks', waId).withConverter(converters.whatsappLink);
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data() : null;
+}
+
+/**
+ * Deactivates a WhatsApp link.
+ */
+export async function deactivateWhatsAppLink(waId: string): Promise<void> {
+  const ref = doc(db, 'whatsappLinks', waId);
+  await updateDoc(ref, {
+    isActive: false,
+  });
+}
+
+/**
+ * Gets an active session or creates a new one.
+ */
+export async function getOrCreateSession(businessId: string, waId: string): Promise<WhatsAppSession> {
+  const sessionsRef = collection(db, `businesses/${businessId}/whatsappSessions`).withConverter(converters.whatsappSession);
+  const q = query(
+    sessionsRef,
+    where('waId', '==', waId),
+    orderBy('createdAt', 'desc'),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+
+  let session: WhatsAppSession | null = null;
+
+  if (!snap.empty) {
+    const s = snap.docs[0].data();
+    if (s.expiresAt.toMillis() > Date.now() && s.state !== 'delivered') {
+      session = s;
+    }
+  }
+
+  // If no active session found or expired, create a new one
+  if (!session) {
+    const newRef = doc(collection(db, `businesses/${businessId}/whatsappSessions`));
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000)); // 30 mins
+    const newSession = {
+      id: newRef.id,
+      businessId,
+      waId,
+      state: 'idle',
+      intentData: {},
+      resolvedData: {},
+      pendingField: null,
+      messageHistory: [],
+      invoiceId: null,
+      expiresAt,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(newRef, newSession);
+    session = newSession as unknown as WhatsAppSession;
+  }
+
+  return session;
+}
+
+/**
+ * Updates a WhatsApp session.
+ */
+export async function updateSession(businessId: string, sessionId: string, data: Partial<WhatsAppSession>): Promise<void> {
+  const ref = doc(db, `businesses/${businessId}/whatsappSessions`, sessionId);
+  await updateDoc(ref, {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Adds a message to a session's history.
+ */
+export async function addMessageToHistory(businessId: string, sessionId: string, role: 'user' | 'bot', content: string): Promise<void> {
+  const ref = doc(db, `businesses/${businessId}/whatsappSessions`, sessionId).withConverter(converters.whatsappSession);
+  
+  await runTransaction(db, async (transaction) => {
+    const docSnap = await transaction.get(ref);
+    if (!docSnap.exists()) return;
+    
+    const session = docSnap.data();
+    const messageHistory = session.messageHistory || [];
+    
+    messageHistory.push({
+      role,
+      content,
+      timestamp: Timestamp.now()
+    });
+
+    // Keep last 10 messages
+    if (messageHistory.length > 10) {
+      messageHistory.splice(0, messageHistory.length - 10);
+    }
+
+    transaction.update(ref, {
+      messageHistory,
+      updatedAt: serverTimestamp()
+    });
+  });
+}
+
+/**
+ * Expires a WhatsApp session.
+ */
+export async function expireSession(businessId: string, sessionId: string): Promise<void> {
+  const ref = doc(db, `businesses/${businessId}/whatsappSessions`, sessionId);
+  await updateDoc(ref, {
+    state: 'idle',
+    intentData: {},
+    resolvedData: {},
+    pendingField: null,
+    updatedAt: serverTimestamp(),
   });
 }
