@@ -543,7 +543,7 @@ async function sendModifyOptions(waId: string) {
       { id: 'modify_tva', title: 'TVA', description: 'Changer le taux de TVA' },
     ]
   }];
-  await sendListMessage(waId, "Sélectionnez le champ à modifier :", sections, 'Modifier');
+  await sendListMessage(waId, "Sélectionnez le champ à modifier :", sections);
 }
 
 async function handleModifyField(businessId: string, waId: string, session: WhatsAppSession, replyId: string) {

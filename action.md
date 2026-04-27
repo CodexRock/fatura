@@ -1,72 +1,58 @@
-# Actions Requises (WhatsApp Bot)
+# Actions Requises (WhatsApp Bot via Twilio)
 
-Voici un résumé complet de toutes les actions que vous devez effectuer (les étapes "HAMZA ACTION REQUIRED") pour finaliser l'intégration du bot WhatsApp, depuis le début jusqu'à la fin de l'étape 8. 
-
-Puisque nous avons développé toutes les fonctionnalités jusqu'à l'étape 8 sans que vous ayez pu encore tout configurer (en attente de la validation Meta), **voici exactement ce que vous devez faire dès que votre compte Meta est approuvé.**
+Puisque le compte Meta Business est bloqué et nécessite une vérification d'entreprise impossible pour le moment, nous avons migré vers **Twilio WhatsApp Sandbox**. Cela vous permet d'utiliser le bot immédiatement sans attendre de validation.
 
 ---
 
-### Étape 1 : Récupération des clés et Configuration Firebase
-Dès que Meta valide votre entreprise, vous aurez accès à vos identifiants de production.
+### Étape 1 : Récupération des clés Twilio
+1. Créez un compte sur [Twilio.com](https://www.twilio.com/) (ou connectez-vous).
+2. Dans votre Console Twilio (Dashboard principal), récupérez :
+   - **Account SID**
+   - **Auth Token**
+3. Allez dans **Messaging** → **Try it out** → **Send a WhatsApp message**.
+4. Suivez les instructions pour activer la **Sandbox** :
+   - Envoyez le code (ex: `join context-xyz`) depuis votre téléphone au numéro Twilio indiqué (ex: `+1 415 523 8886`).
+   - Notez ce **numéro de téléphone Twilio** (celui de la sandbox).
 
-1. **Récupérez vos identifiants Meta :**
-   - `App Secret` (depuis les paramètres de l'app Meta)
-   - `Permanent Access Token` (Token d'accès permanent)
-   - `Phone Number ID` (ID du numéro de téléphone)
-   - `WABA ID` (ID du compte WhatsApp Business)
-2. **Choisissez un Verify Token :** Inventez une chaîne de caractères aléatoire (ex: `fatura_wa_verify_2026_xyz`).
-3. **Configurez Firebase avec un fichier `.env` :**
-   Firebase n'utilise plus `functions:config:set` (déprécié). Créez plutôt un fichier nommé `.env` dans le dossier `functions/` avec le contenu suivant :
-   ```env
-   META_APP_SECRET="XXX"
-   META_ACCESS_TOKEN="XXX"
-   META_PHONE_NUMBER_ID="XXX"
-   META_WABA_ID="XXX"
-   WHATSAPP_VERIFY_TOKEN="XXX"
-   GEMINI_API_KEY="VOTRE_CLE_API_GEMINI"
-   ```
+### Étape 2 : Configuration du fichier `.env`
+Allez dans votre dossier `functions/` et mettez à jour (ou créez) le fichier `.env` avec vos nouveaux identifiants :
 
-### Étape 2 : Déploiement Complet
-Maintenant que le code est prêt et configuré, il faut tout envoyer sur vos serveurs.
+```env
+TWILIO_ACCOUNT_SID="VOTRE_ACCOUNT_SID"
+TWILIO_AUTH_TOKEN="VOTRE_AUTH_TOKEN"
+TWILIO_PHONE_NUMBER="whatsapp:+14155238886"  # Le numéro de la Sandbox Twilio
+GEMINI_API_KEY="VOTRE_CLE_API_GEMINI"
+```
 
-1. **Déployez les Cloud Functions et les Index Firestore :**
-   ```bash
-   firebase deploy --only functions,firestore:indexes
-   ```
-2. **Déployez le Frontend :**
-   Déployez votre application React sur Vercel (ou votre plateforme d'hébergement habituelle) pour que la nouvelle interface de configuration WhatsApp et le Dashboard soient en ligne.
+### Étape 3 : Déploiement du nouveau code
+Nous avons refait le code pour Twilio. Déployez-le maintenant :
 
-### Étape 3 : Configuration du Webhook sur Meta
-C'est ici que vous connectez Meta à votre application Fatura.
+```bash
+cd functions
+npm run build
+firebase deploy --only functions
+```
 
-1. Allez dans le tableau de bord de votre App Meta → **WhatsApp** → **Configuration**.
-2. Modifiez le **Webhook URL** et mettez : 
+### Étape 4 : Configuration du Webhook sur Twilio
+C'est l'étape CRUCIALE pour que Twilio envoie les messages à votre code Firebase.
+
+1. Dans la console Twilio, allez dans **Messaging** → **Settings** → **WhatsApp Sandbox Settings**.
+2. Dans le champ **"WHEN A MESSAGE COMES IN"**, collez votre URL Firebase :
    `https://europe-west1-fatura-saas-maroc.cloudfunctions.net/whatsappWebhook`
-3. Renseignez le **Verify Token** (celui que vous avez inventé à l'Étape 1).
-4. Cliquez sur **Gérer** dans les champs du webhook et abonnez-vous au champ `messages`.
+3. Vérifiez que la méthode à côté est bien **HTTP POST**.
+4. Cliquez sur **Save**.
 
-### Étape 4 : Activation dans Fatura
-1. Connectez-vous à votre application Fatura (sur votre version déployée).
-2. Allez dans les **Paramètres (Settings)**.
-3. Cherchez la nouvelle section **"WhatsApp — Facturation par message"**.
-4. Cliquez sur **Activer WhatsApp** pour lier votre compte Fatura au numéro WhatsApp.
-5. **Vérification :** Vous devriez recevoir automatiquement un message de bienvenue sur votre WhatsApp !
+### Étape 5 : Activation dans Fatura
+1. Allez sur votre application Fatura (la version locale ou déployée).
+2. Allez dans **Paramètres (Settings)** → **WhatsApp**.
+3. Assurez-vous que votre numéro de téléphone est bien renseigné et cliquez sur **Activer**.
 
-### Étape 5 : Tests d'utilisation (Recette)
-Testez le bot WhatsApp pour vous assurer que tout fonctionne correctement :
+### Étape 6 : Tests !
+Envoyez un message depuis votre téléphone au numéro de la Sandbox Twilio :
 
-1. **Le flux normal :**
-   - Envoyez : *"Facture pour [Nom d'un client existant], [Produit] [Prix]dh"*
-   - Le bot doit vous répondre avec un résumé et des boutons.
-   - Cliquez sur **Générer**.
-   - Le bot doit générer la facture, et après quelques instants, **vous envoyer le PDF directement sur WhatsApp**.
-2. **La modification :**
-   - Créez une nouvelle facture, mais avant de générer, cliquez sur **Modifier**. Changez le prix ou la quantité pour tester le flux de modification.
-3. **Les cas d'erreur et limites :**
-   - Envoyez le mot `"aide"` (le bot doit vous renvoyer le menu d'aide).
-   - Envoyez le mot `"annuler"` au milieu d'une création de facture.
-   - Envoyez une image ou un fichier audio (le bot doit vous dire qu'il ne comprend que le texte).
-   - Envoyez 5 à 6 messages très rapidement pour vérifier que la limite de débit (Rate Limiting) fonctionne.
-4. **Le Tableau de Bord (Dashboard) :**
-   - Retournez sur votre application Web Fatura, allez sur le Dashboard principal.
-   - Vérifiez que la nouvelle carte **"Activité WhatsApp"** s'affiche correctement avec le nombre de sessions, factures générées, et PDF envoyés.
+1. **Test AIDE :** Envoyez "aide".
+2. **Test Facture :** Envoyez "Facture pour Ahmed, consulting 5000dh".
+3. **Validation :** Répondez avec les chiffres pour choisir le client/produit si demandé, puis cliquez sur "Générer" (qui sera un message texte "1" ou "Générer" car la sandbox ne supporte pas bien les boutons riches sans templates pré-approuvés).
+
+---
+**Note sur les Boutons :** Dans la Sandbox Twilio, nous utilisons des réponses numérotées (ex: [1] Confirmer, [2] Modifier) car les vrais boutons WhatsApp nécessitent une approbation de template par Meta, ce qui prend du temps.

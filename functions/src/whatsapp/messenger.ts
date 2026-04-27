@@ -1,169 +1,98 @@
-import { WHATSAPP_API_BASE_URL, whatsappConfig } from './config';
-import { OutboundMessage, OutboundButton, OutboundListSection } from './types';
 import * as logger from 'firebase-functions/logger';
+import { whatsappConfig } from './config';
+import { Twilio } from 'twilio';
 
-const MAX_RETRIES = 3;
-const BACKOFF_BASE_MS = 1000; // 1s → 4s → 16s
+let twilioClient: Twilio | null = null;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function sendWhatsAppMessage(data: OutboundMessage, retries = MAX_RETRIES): Promise<string | undefined> {
-  const url = `${WHATSAPP_API_BASE_URL}/${whatsappConfig.metaPhoneNumberId}/messages`;
-  
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${whatsappConfig.metaAccessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
-
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        // Don't retry 4xx client errors (except 429 rate limit)
-        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-          logger.error('WhatsApp API client error (no retry)', { status: response.status, data: responseData });
-          throw new Error(`WhatsApp API Error ${response.status}: ${JSON.stringify(responseData)}`);
-        }
-        throw new Error(`WhatsApp API Error ${response.status}: ${JSON.stringify(responseData)}`);
-      }
-
-      return responseData.messages?.[0]?.id;
-    } catch (error) {
-      if (attempt < retries) {
-        const delayMs = BACKOFF_BASE_MS * Math.pow(4, attempt); // 1s, 4s, 16s
-        logger.warn(`WhatsApp send failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${delayMs}ms`, { error });
-        await sleep(delayMs);
-      } else {
-        logger.error(`WhatsApp send failed after ${retries + 1} attempts`, error);
-        throw error;
-      }
+function getTwilioClient() {
+  if (!twilioClient) {
+    if (whatsappConfig.twilioAccountSid === 'PLACEHOLDER_SID' || whatsappConfig.twilioAuthToken === 'PLACEHOLDER_TOKEN') {
+      logger.error('Twilio credentials not configured');
+      return null;
     }
+    twilioClient = new Twilio(whatsappConfig.twilioAccountSid, whatsappConfig.twilioAuthToken);
   }
-  // Unreachable — loop always returns or throws, but TS requires this
-  return undefined;
+  return twilioClient;
 }
 
-export async function sendTextMessage(waId: string, text: string) {
-  const payload: OutboundMessage = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: waId,
-    type: 'text',
-    text: {
-      preview_url: false,
-      body: text
-    }
-  };
-  return sendWhatsAppMessage(payload);
-}
+/**
+ * Sends a text message via Twilio WhatsApp API.
+ * @param waId The recipient's WhatsApp ID (e.g., '33766455249')
+ * @param text The message content.
+ */
+export async function sendTextMessage(waId: string, text: string): Promise<string | undefined> {
+  const client = getTwilioClient();
+  if (!client) throw new Error('Twilio client not initialized');
 
-export async function sendButtonMessage(waId: string, bodyText: string, buttons: { id: string; title: string }[]) {
-  if (buttons.length > 3) {
-    throw new Error('WhatsApp only supports a maximum of 3 buttons.');
-  }
-
-  const outboundButtons: OutboundButton[] = buttons.map(btn => ({
-    type: 'reply',
-    reply: {
-      id: btn.id,
-      title: btn.title
-    }
-  }));
-
-  const payload: OutboundMessage = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: waId,
-    type: 'interactive',
-    interactive: {
-      type: 'button',
-      body: {
-        text: bodyText
-      },
-      action: {
-        buttons: outboundButtons
-      }
-    }
-  };
-  return sendWhatsAppMessage(payload);
-}
-
-export async function sendListMessage(waId: string, bodyText: string, sections: OutboundListSection[], buttonText: string = 'Choisir') {
-  const payload: OutboundMessage = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: waId,
-    type: 'interactive',
-    interactive: {
-      type: 'list',
-      body: {
-        text: bodyText
-      },
-      action: {
-        button: buttonText,
-        sections: sections
-      }
-    }
-  };
-  return sendWhatsAppMessage(payload);
-}
-
-export async function sendDocumentMessage(waId: string, mediaIdOrUrl: string, filename: string, caption?: string) {
-  const payload: OutboundMessage = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: waId,
-    type: 'document',
-    document: {
-      // If it starts with http, it's a URL, otherwise assume it's a Meta Media ID
-      ...(mediaIdOrUrl.startsWith('http') ? { link: mediaIdOrUrl } : { id: mediaIdOrUrl }),
-      filename,
-      caption
-    }
-  };
-  return sendWhatsAppMessage(payload);
-}
-
-export async function uploadMedia(buffer: Buffer, mimeType: string, filename: string = 'document.pdf') {
-  const url = `${WHATSAPP_API_BASE_URL}/${whatsappConfig.metaPhoneNumberId}/media`;
-  
-  const formData = new FormData();
-  formData.append('messaging_product', 'whatsapp');
-  formData.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+  const formattedTo = `whatsapp:+${waId.replace('whatsapp:', '').replace('+', '')}`;
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${whatsappConfig.metaAccessToken}`,
-        // Note: fetch will automatically set the correct Content-Type for multipart/form-data
-      },
-      body: formData as any
+    const message = await client.messages.create({
+      from: whatsappConfig.twilioPhoneNumber,
+      to: formattedTo,
+      body: text
     });
-
-    const responseData = await response.json();
-    
-    if (!response.ok) {
-      logger.error('WhatsApp Media Upload Error', responseData);
-      throw new Error(`WhatsApp Media Upload Error: ${JSON.stringify(responseData)}`);
-    }
-
-    return responseData.id;
+    logger.info('Message sent via Twilio', { sid: message.sid, to: formattedTo });
+    return message.sid;
   } catch (error) {
-    logger.error('Failed to upload media to WhatsApp', error);
+    logger.error('Failed to send message via Twilio', { error, to: formattedTo });
     throw error;
   }
 }
 
+/**
+ * Sends a document (PDF) via Twilio WhatsApp API.
+ * @param waId The recipient's WhatsApp ID.
+ * @param mediaUrl A publicly accessible URL to the document.
+ * @param filename The filename for the document.
+ * @param caption Optional caption.
+ */
+export async function sendDocumentMessage(waId: string, mediaUrl: string, filename: string, caption?: string): Promise<string | undefined> {
+  const client = getTwilioClient();
+  if (!client) throw new Error('Twilio client not initialized');
+
+  const formattedTo = `whatsapp:+${waId.replace('whatsapp:', '').replace('+', '')}`;
+
+  try {
+    const message = await client.messages.create({
+      from: whatsappConfig.twilioPhoneNumber,
+      to: formattedTo,
+      mediaUrl: [mediaUrl],
+      body: caption || filename
+    });
+    logger.info('Document sent via Twilio', { sid: message.sid, to: formattedTo, mediaUrl });
+    return message.sid;
+  } catch (error) {
+    logger.error('Failed to send document via Twilio', { error, to: formattedTo, mediaUrl });
+    throw error;
+  }
+}
+
+// Sandbox doesn't support interactive buttons well without templates.
+// We'll map these to simple text responses for the user to reply to.
+export async function sendButtonMessage(waId: string, bodyText: string, buttons: { id: string; title: string }[]) {
+  const options = buttons.map((b, i) => `[${i + 1}] ${b.title}`).join('\n');
+  const fullText = `${bodyText}\n\n${options}\n\nRépondez avec le chiffre correspondant.`;
+  return sendTextMessage(waId, fullText);
+}
+
+export async function sendListMessage(waId: string, bodyText: string, sections: any[]) {
+  let options = '';
+  let count = 1;
+  for (const section of sections) {
+    if (section.title) options += `*${section.title}*\n`;
+    for (const row of section.rows) {
+      options += `[${count++}] ${row.title}${row.description ? ` (${row.description})` : ''}\n`;
+    }
+  }
+  const fullText = `${bodyText}\n\n${options}\n\nRépondez avec le chiffre correspondant.`;
+  return sendTextMessage(waId, fullText);
+}
+
 export async function sendWelcomeMessage(waId: string) {
-  const welcomeText = `🎉 Bienvenue sur Fatura WhatsApp ! Vous pouvez maintenant créer des factures en envoyant un simple message.
+  const welcomeText = `🎉 Bienvenue sur Fatura WhatsApp ! (via Twilio Sandbox)
+
+Vous pouvez maintenant créer des factures en envoyant un simple message.
 
 Exemple: "Facture pour Ahmed, consulting 5000dh"
 

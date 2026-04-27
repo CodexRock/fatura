@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
-import { sendDocumentMessage, sendTextMessage, uploadMedia } from './messenger';
+import { sendDocumentMessage, sendTextMessage } from './messenger';
 import { logActivity } from '../index';
 
 if (!admin.apps.length) {
@@ -11,12 +11,8 @@ const db = admin.firestore();
 const bucket = admin.storage().bucket();
 
 /**
- * Polls for the generated PDF on an invoice, uploads it to WhatsApp Media API,
- * and sends it as a document message back to the user.
- *
- * The onInvoiceCreated trigger generates the PDF asynchronously. This function
- * waits for the pdfUrl field to appear on the invoice document, then downloads
- * the PDF from Firebase Storage, uploads it to WhatsApp, and delivers it.
+ * Polls for the generated PDF on an invoice, generates a signed URL,
+ * and sends it via Twilio WhatsApp.
  */
 export async function deliverInvoicePDF(
   businessId: string,
@@ -29,10 +25,10 @@ export async function deliverInvoicePDF(
 
   try {
     // Poll for pdfUrl on the invoice (check every 2 seconds, max 30 seconds)
-    let pdfUrl: string | null = null;
     let invoiceNumber = '';
     let totalTTC = 0;
-    const maxAttempts = 15; // 15 x 2s = 30 seconds
+    let pdfUrlFound = false;
+    const maxAttempts = 15;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const invoiceDoc = await invoiceRef.get();
@@ -46,16 +42,15 @@ export async function deliverInvoicePDF(
       totalTTC = invoiceData.totals?.totalTTC || 0;
 
       if (invoiceData.pdfUrl) {
-        pdfUrl = invoiceData.pdfUrl;
+        pdfUrlFound = true;
         break;
       }
 
-      // Wait 2 seconds before next check
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
-    if (pdfUrl) {
-      // Download the PDF from Firebase Storage
+    if (pdfUrlFound) {
+      // Get a signed URL for the PDF in Storage
       const filePath = `invoices/${businessId}/${invoiceId}.pdf`;
       const file = bucket.file(filePath);
 
@@ -67,44 +62,38 @@ export async function deliverInvoicePDF(
         return;
       }
 
-      const [pdfBuffer] = await file.download();
+      // Generate a signed URL valid for 1 hour
+      const [signedUrl] = await file.getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 60 * 60 * 1000,
+      });
 
-      // Upload PDF to WhatsApp Media API
-      const mediaId = await uploadMedia(
-        Buffer.from(pdfBuffer),
-        'application/pdf',
-        `${invoiceNumber}.pdf`
-      );
-
-      // Send the document via WhatsApp
+      // Send the document via Twilio
       const totalFormatted = (totalTTC / 100).toFixed(2);
       const caption = `✅ Votre facture ${invoiceNumber} est prête ! Montant: ${totalFormatted} MAD TTC.\nTransférez ce PDF à votre client.`;
 
       await sendDocumentMessage(
         waId,
-        mediaId,
+        signedUrl,
         `${invoiceNumber}.pdf`,
         caption
       );
 
-      logger.info('Invoice PDF delivered via WhatsApp', {
+      logger.info('Invoice PDF delivered via Twilio', {
         businessId, invoiceId, invoiceNumber, waId
       });
 
       await logActivity(businessId, "system", "WhatsApp: PDF envoyé", "invoice", invoiceId, {
         invoiceNumber,
-        waId,
-        mediaId
+        waId
       });
     } else {
-      // PDF didn't arrive within 30 seconds — send fallback
       logger.warn('PDF generation timed out for WhatsApp delivery', {
         businessId, invoiceId
       });
       await sendFallbackMessage(waId, invoiceNumber);
     }
 
-    // Mark session as delivered
     await markSessionDelivered(sessionRef);
 
   } catch (error) {
@@ -112,7 +101,6 @@ export async function deliverInvoicePDF(
       businessId, invoiceId, error
     });
     
-    // Still try to notify the user
     try {
       await sendTextMessage(
         waId,

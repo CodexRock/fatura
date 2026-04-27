@@ -4,11 +4,9 @@ import * as functions from 'firebase-functions';
 // This is important for Firebase Functions to pick up config changes properly,
 // and it provides placeholder fallbacks for when the config isn't fully set yet.
 export const whatsappConfig = {
-  get metaAppSecret() { return process.env.META_APP_SECRET || 'PLACEHOLDER_SECRET'; },
-  get metaAccessToken() { return process.env.META_ACCESS_TOKEN || 'PLACEHOLDER_TOKEN'; },
-  get metaPhoneNumberId() { return process.env.META_PHONE_NUMBER_ID || 'PLACEHOLDER_PHONE_ID'; },
-  get metaWabaId() { return process.env.META_WABA_ID || 'PLACEHOLDER_WABA_ID'; },
-  get verifyToken() { return process.env.WHATSAPP_VERIFY_TOKEN || 'PLACEHOLDER_VERIFY_TOKEN'; },
+  get twilioAccountSid() { return process.env.TWILIO_ACCOUNT_SID || 'PLACEHOLDER_SID'; },
+  get twilioAuthToken() { return process.env.TWILIO_AUTH_TOKEN || 'PLACEHOLDER_TOKEN'; },
+  get twilioPhoneNumber() { return process.env.TWILIO_PHONE_NUMBER || 'whatsapp:+14155238886'; }, // Sandbox number
   get geminiApiKey() { return process.env.GEMINI_API_KEY || 'PLACEHOLDER_GEMINI_KEY'; }
 };
 
