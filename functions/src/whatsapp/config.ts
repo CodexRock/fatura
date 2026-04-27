@@ -10,4 +10,3 @@ export const whatsappConfig = {
   get geminiApiKey() { return process.env.GEMINI_API_KEY || 'PLACEHOLDER_GEMINI_KEY'; }
 };
 
-export const WHATSAPP_API_BASE_URL = 'https://graph.facebook.com/v19.0';

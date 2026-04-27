@@ -241,6 +241,7 @@ export interface WhatsAppSession {
   messageHistory: { role: 'user' | 'bot'; content: string; timestamp: Timestamp }[];
   invoiceId: string | null;
   errorCount?: number;
+  currentOptions?: string[];
   expiresAt: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;

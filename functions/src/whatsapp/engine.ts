@@ -75,6 +75,7 @@ async function getOrCreateSession(businessId: string, waId: string): Promise<Wha
       messageHistory: [],
       invoiceId: null,
       errorCount: 0,
+      currentOptions: [],
       expiresAt,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -105,6 +106,7 @@ async function resetSession(businessId: string, sessionId: string): Promise<void
     resolvedData: {},
     pendingField: null,
     errorCount: 0,
+    currentOptions: [],
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
@@ -138,6 +140,34 @@ async function addMessageToHistory(businessId: string, sessionId: string, role: 
 }
 
 // ─────────────────────────────────────────────────────────────
+// Message Parsing Helpers
+// ─────────────────────────────────────────────────────────────
+
+function getReplyId(message: WebhookMessage, session: WhatsAppSession): string | null {
+  if (message.type === 'interactive') {
+    return message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || null;
+  }
+  
+  if (message.type === 'text') {
+    const text = message.text?.body?.trim();
+    if (!text) return null;
+    
+    // Check if it's a number corresponding to an option
+    const index = parseInt(text, 10);
+    if (!isNaN(index) && session.currentOptions && index > 0 && index <= session.currentOptions.length) {
+      return session.currentOptions[index - 1];
+    }
+
+    // Also check if the text matches the option ID exactly (for robustness)
+    if (session.currentOptions?.includes(text)) {
+      return text;
+    }
+  }
+  
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Entry Point
 // ─────────────────────────────────────────────────────────────
 export async function processMessage(businessId: string, waId: string, message: WebhookMessage) {
@@ -162,10 +192,8 @@ export async function processMessage(businessId: string, waId: string, message: 
     const messageText = message.type === 'text' ? message.text?.body : 
       (message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || message.interactive?.list_reply?.id);
       
-    // Ignore empty messages silently
     if (!messageText || messageText.trim().length === 0) return;
 
-    // Truncate overly long messages
     if (messageText.length > MAX_MESSAGE_LENGTH) {
       await sendTextMessage(waId, "Message trop long. Veuillez raccourcir votre message.");
       return;
@@ -173,7 +201,6 @@ export async function processMessage(businessId: string, waId: string, message: 
 
     await addMessageToHistory(businessId, session.id, 'user', messageText);
 
-    // ── Global commands (work from any state) ──
     const lowerText = messageText.toLowerCase().trim();
     
     if (lowerText === 'aide' || lowerText === 'help') {
@@ -223,7 +250,6 @@ export async function processMessage(businessId: string, waId: string, message: 
         break;
     }
 
-    // Reset error count on successful processing
     if ((session.errorCount || 0) > 0) {
       await updateSession(businessId, session.id, { errorCount: 0 } as any);
     }
@@ -243,18 +269,12 @@ export async function processMessage(businessId: string, waId: string, message: 
     if (errorCount >= MAX_CONSECUTIVE_ERRORS) {
       await resetSession(businessId, session.id);
       await safeSend(waId, "Plusieurs erreurs consécutives se sont produites. Votre session a été réinitialisée. Veuillez réessayer.");
-    } else if (error.message?.includes('Firestore') || error.message?.includes('database')) {
-      await safeSend(waId, "Erreur de base de données. Réessayez dans quelques instants.");
     } else {
       await safeSend(waId, "Désolé, une erreur technique est survenue. Réessayez.");
     }
   }
 }
 
-/**
- * Safe send that never throws — used in error handling paths to avoid
- * error-during-error-handling loops.
- */
 async function safeSend(waId: string, text: string): Promise<void> {
   try {
     await sendTextMessage(waId, text);
@@ -269,7 +289,6 @@ async function safeSend(waId: string, text: string): Promise<void> {
 
 async function handleParsingIntent(businessId: string, waId: string, session: WhatsAppSession, text: string) {
   let intent: NlpIntent;
-
   try {
     intent = await parseInvoiceIntent(text, session.messageHistory);
   } catch (err) {
@@ -302,21 +321,25 @@ async function handleParsingIntent(businessId: string, waId: string, session: Wh
         });
         await processProductPhase(businessId, waId, session.id, intent);
       } else if (match.fuzzy.length > 0) {
-        await updateSession(businessId, session.id, { state: 'awaiting_client' });
+        const options = match.fuzzy.slice(0, 5).map(c => `client_${c.id}`);
+        await updateSession(businessId, session.id, { state: 'awaiting_client', currentOptions: options });
+        
         const sections = [{
           title: "Clients trouvés",
           rows: match.fuzzy.slice(0, 5).map(c => ({ id: `client_${c.id}`, title: c.name, description: '' }))
         }];
         await sendListMessage(waId, `Plusieurs clients correspondent à "${intent.entities.clientName}". Lequel ?`, sections);
       } else {
-        await updateSession(businessId, session.id, { state: 'awaiting_client' });
+        const options = ['create_client', 'retry_client'];
+        await updateSession(businessId, session.id, { state: 'awaiting_client', currentOptions: options });
+        
         await sendButtonMessage(waId, `Client "${intent.entities.clientName}" introuvable. Voulez-vous le créer ?`, [
           { id: 'create_client', title: 'Oui, créer' },
           { id: 'retry_client', title: 'Non, réessayer' }
         ]);
       }
     } else {
-      await updateSession(businessId, session.id, { state: 'awaiting_client' });
+      await updateSession(businessId, session.id, { state: 'awaiting_client', currentOptions: [] });
       await sendTextMessage(waId, "Pour quel client voulez-vous créer la facture ?");
     }
   } else if (intent.intent === 'unknown') {
@@ -325,12 +348,14 @@ async function handleParsingIntent(businessId: string, waId: string, session: Wh
 }
 
 async function handleAwaitingClient(businessId: string, waId: string, session: WhatsAppSession, message: WebhookMessage) {
-  if (message.type === 'interactive') {
-    const replyId = message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
+  const replyId = getReplyId(message, session);
+  
+  if (replyId) {
     if (replyId === 'create_client') {
-      await updateSession(businessId, session.id, { state: 'creating_client' });
+      await updateSession(businessId, session.id, { state: 'creating_client', currentOptions: [] });
       await sendTextMessage(waId, "Entrez l'ICE du client (ou tapez \"passer\" pour ignorer) :");
     } else if (replyId === 'retry_client') {
+      await updateSession(businessId, session.id, { currentOptions: [] });
       await sendTextMessage(waId, "Quel est le nom du client ?");
     } else if (replyId?.startsWith('client_')) {
       const clientId = replyId.replace('client_', '');
@@ -340,6 +365,7 @@ async function handleAwaitingClient(businessId: string, waId: string, session: W
       });
       await updateSession(businessId, session.id, {
         state: 'awaiting_product',
+        currentOptions: [],
         resolvedData: { ...session.resolvedData, clientId }
       });
       await processProductPhase(businessId, waId, session.id, { entities: session.intentData } as any);
@@ -355,10 +381,13 @@ async function handleAwaitingClient(businessId: string, waId: string, session: W
         });
         await updateSession(businessId, session.id, {
           state: 'awaiting_product',
+          currentOptions: [],
           resolvedData: { ...session.resolvedData, clientId: match.exact.id }
         });
         await processProductPhase(businessId, waId, session.id, { entities: session.intentData } as any);
     } else {
+      const options = ['create_client', 'retry_client'];
+      await updateSession(businessId, session.id, { currentOptions: options });
       await sendButtonMessage(waId, `Client "${text}" introuvable.`, [
           { id: 'create_client', title: 'Créer nouveau' },
           { id: 'retry_client', title: 'Réessayer' }
@@ -491,13 +520,14 @@ async function sendConfirmation(businessId: string, waId: string, sessionId: str
 
   const lines = session.resolvedData.lines || [];
   const totals = session.resolvedData.totals;
-  
   if (lines.length === 0 || !totals) return;
 
   const line = lines[0];
   const tvaStr = line.tvaRate === 0 ? "Sans TVA" : `TVA ${line.tvaRate}%: ${(totals.totalTVA / 100).toFixed(2)}`;
-
   const summary = `📋 Facture pour *${clientName}*:\n• ${line.description} — ${line.quantity} x ${(line.unitPrice / 100).toFixed(2)} MAD HT\n• ${tvaStr}\n• *Total TTC: ${(totals.totalTTC / 100).toFixed(2)} MAD*\n\nVoulez-vous la générer ?`;
+
+  const options = ['generate_invoice', 'modify_invoice', 'cancel_invoice'];
+  await updateSession(businessId, session.id, { currentOptions: options });
 
   await sendButtonMessage(waId, summary, [
     { id: 'generate_invoice', title: '✅ Générer' },
@@ -506,20 +536,16 @@ async function sendConfirmation(businessId: string, waId: string, sessionId: str
   ]);
 }
 
-// ─────────────────────────────────────────────────────────────
-// Confirming State Handlers
-// ─────────────────────────────────────────────────────────────
-
 async function handleConfirming(businessId: string, waId: string, session: WhatsAppSession, message: WebhookMessage) {
-  if (message.type === 'interactive') {
-    const replyId = message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
+  const replyId = getReplyId(message, session);
   
+  if (replyId) {
     if (replyId === 'cancel_invoice') {
       await logActivity(businessId, "system", "WhatsApp: session annulée", "whatsappSession", session.id, { waId });
       await resetSession(businessId, session.id);
       await sendTextMessage(waId, "Facture annulée.");
     } else if (replyId === 'modify_invoice') {
-      await sendModifyOptions(waId);
+      await sendModifyOptions(businessId, waId, session.id);
     } else if (replyId === 'generate_invoice') {
       await logActivity(businessId, "system", "WhatsApp: facture confirmée", "whatsappSession", session.id, { waId });
       await generateAndDeliver(businessId, waId, session);
@@ -533,7 +559,10 @@ async function handleConfirming(businessId: string, waId: string, session: Whats
   }
 }
 
-async function sendModifyOptions(waId: string) {
+async function sendModifyOptions(businessId: string, waId: string, sessionId: string) {
+  const options = ['modify_description', 'modify_price', 'modify_quantity', 'modify_tva'];
+  await updateSession(businessId, sessionId, { currentOptions: options });
+
   const sections = [{
     title: "Que voulez-vous modifier ?",
     rows: [
@@ -559,7 +588,8 @@ async function handleModifyField(businessId: string, waId: string, session: What
 
   await updateSession(businessId, session.id, {
     state: 'confirming',
-    pendingField: mapping.field
+    pendingField: mapping.field,
+    currentOptions: [] // Clear options while waiting for text input
   });
   await sendTextMessage(waId, mapping.prompt);
 }
@@ -599,7 +629,6 @@ async function handleModifyValue(businessId: string, waId: string, session: What
     line.tvaRate = tva as any;
   }
 
-  // Recalculate totals
   const { taxableBase, totalTVA, totalTTC } = calculateLineTotals(
     line.unitPrice, line.quantity, line.tvaRate, undefined
   );
@@ -623,7 +652,6 @@ async function handleModifyValue(businessId: string, waId: string, session: What
 // ─────────────────────────────────────────────────────────────
 
 async function generateAndDeliver(businessId: string, waId: string, session: WhatsAppSession) {
-  // Check invoice rate limit before generating
   if (isInvoiceRateLimited(businessId)) {
     await sendTextMessage(waId, "Vous avez atteint le nombre maximum de factures pour cette heure. Réessayez plus tard.");
     return;
@@ -633,8 +661,6 @@ async function generateAndDeliver(businessId: string, waId: string, session: Wha
   
   try {
     const invoice = await createInvoiceFromWhatsApp(businessId, session.resolvedData, session.intentData);
-    
-    // Record for rate limiting
     recordInvoiceCreation(businessId);
 
     await logActivity(businessId, "system", "WhatsApp: facture créée", "invoice", invoice.id, { 
@@ -648,8 +674,6 @@ async function generateAndDeliver(businessId: string, waId: string, session: Wha
     });
     
     await sendTextMessage(waId, "⏳ Génération en cours...");
-    
-    // Fire-and-forget PDF delivery with error handling
     deliverInvoicePDF(businessId, invoice.id, session.id, waId).catch(err => {
       logger.error('Async PDF delivery failed', { error: err, businessId, invoiceId: invoice.id });
     });
