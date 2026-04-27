@@ -103,7 +103,7 @@ export async function parseInvoiceIntent(
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-latest",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: nlpSchema,
@@ -151,8 +151,13 @@ export async function parseInvoiceIntent(
     logger.info("NLP Parse Result", { message, intent });
     return intent;
 
-  } catch (error) {
-    logger.error("Error parsing NLP intent", { error, message });
+  } catch (error: any) {
+    logger.error("Error parsing NLP intent", { 
+      error: error?.message || error,
+      status: error?.status,
+      details: error?.response?.data || error?.details,
+      message 
+    });
     return {
       intent: 'unknown',
       confidence: 0,
