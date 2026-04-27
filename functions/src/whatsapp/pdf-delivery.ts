@@ -27,6 +27,7 @@ export async function deliverInvoicePDF(
     // Poll for pdfUrl on the invoice (check every 2 seconds, max 30 seconds)
     let invoiceNumber = '';
     let totalTTC = 0;
+    let pdfUrl = '';
     let pdfUrlFound = false;
     const maxAttempts = 15;
 
@@ -42,39 +43,26 @@ export async function deliverInvoicePDF(
       totalTTC = invoiceData.totals?.totalTTC || 0;
 
       if (invoiceData.pdfUrl) {
+        pdfUrl = invoiceData.pdfUrl;
         pdfUrlFound = true;
         break;
+      }
+
+      if (attempt === 3) {
+        await sendTextMessage(waId, "⚙️ Finalisation du document...");
       }
 
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     if (pdfUrlFound) {
-      // Get a signed URL for the PDF in Storage
-      const filePath = `invoices/${businessId}/${invoiceId}.pdf`;
-      const file = bucket.file(filePath);
-
-      const [exists] = await file.exists();
-      if (!exists) {
-        logger.error('PDF file not found in Storage', { filePath });
-        await sendFallbackMessage(waId, invoiceNumber);
-        await markSessionDelivered(sessionRef);
-        return;
-      }
-
-      // Generate a signed URL valid for 1 hour
-      const [signedUrl] = await file.getSignedUrl({
-        action: 'read',
-        expires: Date.now() + 60 * 60 * 1000,
-      });
-
-      // Send the document via Twilio
+      // Send the document via Twilio using the public URL
       const totalFormatted = (totalTTC / 100).toFixed(2);
       const caption = `✅ Votre facture ${invoiceNumber} est prête ! Montant: ${totalFormatted} MAD TTC.\nTransférez ce PDF à votre client.`;
 
       await sendDocumentMessage(
         waId,
-        signedUrl,
+        pdfUrl,
         `${invoiceNumber}.pdf`,
         caption
       );

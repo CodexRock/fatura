@@ -17,6 +17,14 @@
         { "fieldPath": "waId", "order": "ASCENDING" },
         { "fieldPath": "state", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "whatsappSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "waId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

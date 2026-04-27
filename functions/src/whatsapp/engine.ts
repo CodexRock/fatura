@@ -288,6 +288,8 @@ async function safeSend(waId: string, text: string): Promise<void> {
 // ─────────────────────────────────────────────────────────────
 
 async function handleParsingIntent(businessId: string, waId: string, session: WhatsAppSession, text: string) {
+  await sendTextMessage(waId, "⏳ Je m'en occupe ! Un instant...");
+  
   let intent: NlpIntent;
   try {
     intent = await parseInvoiceIntent(text, session.messageHistory);
@@ -309,6 +311,7 @@ async function handleParsingIntent(businessId: string, waId: string, session: Wh
     });
 
     if (intent.entities.clientName) {
+      await sendTextMessage(waId, `🔍 Recherche du client "${intent.entities.clientName}"...`);
       const match = await findClientByName(businessId, intent.entities.clientName);
       if (match.exact) {
         await logActivity(businessId, "system", "WhatsApp: client résolu", "client", match.exact.id, { 
@@ -673,7 +676,7 @@ async function generateAndDeliver(businessId: string, waId: string, session: Wha
       invoiceId: invoice.id 
     });
     
-    await sendTextMessage(waId, "⏳ Génération en cours...");
+    await sendTextMessage(waId, `🚀 Facture ${invoice.number} créée ! Je génère maintenant le PDF...`);
     deliverInvoicePDF(businessId, invoice.id, session.id, waId).catch(err => {
       logger.error('Async PDF delivery failed', { error: err, businessId, invoiceId: invoice.id });
     });

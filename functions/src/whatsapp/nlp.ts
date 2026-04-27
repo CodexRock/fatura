@@ -103,24 +103,48 @@ export async function parseInvoiceIntent(
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "models/gemini-2.5-flash",
+      model: "models/gemini-1.5-flash-latest",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: nlpSchema,
-        temperature: 0.1,
+        temperature: 0,
+        maxOutputTokens: 1000,
       },
       systemInstruction: SYSTEM_INSTRUCTION
     });
 
-    let context = "Conversation History:\n";
-    for (const msg of messageHistory) {
-      context += `${msg.role.toUpperCase()}: ${msg.content}\n`;
-    }
-    context += `\nCURRENT MESSAGE TO PARSE:\nUSER: ${message}`;
+    // Format history as contents array
+    const contents: any[] = messageHistory.map(msg => ({
+      role: msg.role === 'bot' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
 
-    const result = await model.generateContent(context);
+    // Add current message
+    contents.push({
+      role: 'user',
+      parts: [{ text: `CURRENT MESSAGE TO PARSE: ${message}` }]
+    });
+
+    const result = await model.generateContent({ contents });
     const text = result.response.text();
-    const parsed = JSON.parse(text);
+    
+    // LOG RAW TEXT FOR DEBUGGING
+    logger.info("Raw Gemini NLP Output", { text, message });
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseError: any) {
+      logger.error("JSON Parse Error on Gemini Output", { text, error: parseError.message });
+      
+      // Attempt manual extraction if JSON mode failed/wrapped
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        throw parseError;
+      }
+    }
 
     // Convert parsed unitPrice to centimes
     let unitPriceCentimes: number | null = null;
